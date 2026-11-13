@@ -1,0 +1,1449 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1e2a44">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>会計帳簿</title>
+<style>
+:root{
+  --bg:#f3f5f9; --card:#fff; --ink:#1c2333; --sub:#5d6678; --line:#e1e5ee; --soft:#f6f8fb;
+  --pri:#2457c5; --pri-weak:#e8eefc; --ok:#12804a; --ok-weak:#e2f4e9; --bad:#c42e2e; --bad-weak:#fdebeb;
+  --warn:#9a5b00; --warn-weak:#fff3dd; --nav:#1e2a44; --exp:#e0782b; --r:12px;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{font-family:system-ui,-apple-system,"Noto Sans JP","Hiragino Sans","Yu Gothic UI",sans-serif;background:var(--bg);color:var(--ink);font-size:16px;line-height:1.55;-webkit-tap-highlight-color:transparent}
+button,input,select,textarea{font:inherit;color:inherit}
+#app{display:flex;min-height:100vh}
+/* ---- サイドメニュー（横長・広い画面） ---- */
+.side{width:196px;flex-shrink:0;background:var(--nav);color:#fff;position:sticky;top:0;height:100vh;overflow-y:auto;padding:calc(14px + env(safe-area-inset-top)) 10px 14px calc(10px + env(safe-area-inset-left))}
+.side .brand{font-weight:700;font-size:18px;padding:6px 10px 14px;line-height:1.3}
+.side .brand small{display:block;font-weight:400;font-size:12px;opacity:.7;margin-top:2px;word-break:break-all}
+.side button{display:flex;align-items:center;gap:10px;width:100%;border:0;background:none;color:#dfe5f2;padding:12px 12px;border-radius:10px;font-size:16px;text-align:left;cursor:pointer;min-height:48px}
+.side button.on{background:#34446a;color:#fff;font-weight:700}
+.side .ico{width:24px;text-align:center;font-size:18px}
+.side hr{border:0;border-top:1px solid #34446a;margin:10px 4px}
+/* ---- 下のメニュー（縦長・せまい画面） ---- */
+.bottom{display:none;position:fixed;left:0;right:0;bottom:0;z-index:30;background:var(--nav);padding:4px 4px calc(4px + env(safe-area-inset-bottom))}
+.bottom button{flex:1;border:0;background:none;color:#cfd7e8;font-size:11px;padding:6px 0 4px;display:flex;flex-direction:column;align-items:center;gap:1px;border-radius:8px;min-height:52px;cursor:pointer}
+.bottom button .ico{font-size:20px;line-height:1.2}
+.bottom button.on{color:#fff;background:#34446a;font-weight:700}
+main{flex:1;min-width:0;padding:calc(14px + env(safe-area-inset-top)) calc(18px + env(safe-area-inset-right)) 40px 18px;max-width:1240px}
+@media (max-width:859px){
+  .side{display:none} .bottom{display:flex}
+  main{padding:calc(10px + env(safe-area-inset-top)) 12px 96px}
+}
+/* ---- 見出し・サブメニュー・期間 ---- */
+.top{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:8px}
+.top h1{font-size:22px;margin:0}
+.subtabs{display:flex;gap:6px;overflow-x:auto;padding:2px 0 8px;margin-bottom:6px;scrollbar-width:none}
+.subtabs::-webkit-scrollbar{display:none}
+.subtabs button{flex-shrink:0;border:1px solid var(--line);background:#fff;padding:9px 16px;border-radius:999px;font-size:15px;cursor:pointer;min-height:44px;white-space:nowrap}
+.subtabs button.on{background:var(--pri);border-color:var(--pri);color:#fff;font-weight:700}
+.period{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.period select{min-height:44px}
+.months{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none;max-width:100%}
+.months::-webkit-scrollbar{display:none}
+.months button{flex-shrink:0;border:1px solid var(--line);background:#fff;border-radius:8px;padding:6px 10px;min-height:40px;min-width:44px;cursor:pointer;font-size:14px}
+.months button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+/* ---- 部品 ---- */
+.card{background:var(--card);border-radius:var(--r);padding:18px;box-shadow:0 1px 2px rgba(20,30,60,.06);margin-bottom:14px}
+.card h2{font-size:18px;margin:0 0 12px}
+.card h3{font-size:16px;margin:16px 0 8px}
+.grid{display:grid;gap:14px}
+.g2{grid-template-columns:repeat(auto-fit,minmax(min(100%,400px),1fr))}
+.g3{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+.kpis{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin-bottom:14px}
+.kpi{background:#fff;border-radius:var(--r);padding:14px 16px;box-shadow:0 1px 2px rgba(20,30,60,.06)}
+.kpi .l{font-size:13px;color:var(--sub)}
+.kpi .v{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:2px;white-space:nowrap}
+.kpi .v small{font-size:13px;font-weight:400;margin-left:2px}
+.muted{color:var(--sub)} .small{font-size:13px} .num{font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+.plus{color:var(--ok)} .minus{color:var(--bad)}
+label.f{display:block;font-size:14px;color:var(--sub);margin:12px 0 4px;font-weight:600}
+.inp,select.inp,textarea.inp{width:100%;border:1px solid #cfd5e1;border-radius:10px;padding:10px 12px;background:#fff;min-height:48px;font-size:16px}
+.inp:focus{outline:2px solid var(--pri);outline-offset:0;border-color:var(--pri)}
+.inp.big{font-size:26px;font-weight:700;text-align:right;min-height:60px;font-variant-numeric:tabular-nums}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1px solid #cfd5e1;background:#fff;border-radius:10px;padding:10px 18px;min-height:48px;cursor:pointer;font-size:16px;font-weight:600;text-decoration:none}
+.btn.pri{background:var(--pri);color:#fff;border-color:var(--pri)}
+.btn.ok{background:var(--ok);color:#fff;border-color:var(--ok)}
+.btn.danger{background:var(--bad);color:#fff;border-color:var(--bad)}
+.btn.ghost{border-color:transparent;background:none;color:var(--pri)}
+.btn.sm{min-height:38px;padding:6px 12px;font-size:14px}
+.btn.wide{width:100%}
+.btn:disabled{opacity:.45;cursor:default}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.row.end{justify-content:flex-end}
+.seg{display:flex;flex-wrap:wrap;gap:8px}
+.seg button{flex:1 1 auto;border:2px solid #cfd5e1;background:#fff;border-radius:10px;padding:10px 12px;min-height:50px;cursor:pointer;font-size:15px;font-weight:600}
+.seg button.on{border-color:var(--pri);background:var(--pri-weak);color:var(--pri)}
+.kind{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:6px}
+.kind button{border:2px solid var(--line);background:#fff;border-radius:12px;padding:14px;font-size:18px;font-weight:700;cursor:pointer;min-height:64px}
+.kind button.on.inc{border-color:var(--pri);background:var(--pri-weak);color:var(--pri)}
+.kind button.on.exp{border-color:var(--exp);background:#fdf0e6;color:#b35610}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chips button{border:1px solid var(--line);background:var(--soft);border-radius:999px;padding:6px 12px;font-size:14px;cursor:pointer;min-height:38px}
+.note{background:var(--soft);border-radius:10px;padding:10px 14px;font-size:14px;color:var(--sub)}
+.note.warn{background:var(--warn-weak);color:var(--warn)}
+.note.ok{background:var(--ok-weak);color:var(--ok)}
+.note.bad{background:var(--bad-weak);color:var(--bad)}
+.tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--line);border-radius:10px}
+table{border-collapse:collapse;width:100%;font-size:15px}
+th,td{padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{background:var(--soft);font-size:13px;color:var(--sub);text-align:left;font-weight:600;white-space:nowrap;position:sticky;top:0}
+tr:last-child td{border-bottom:0}
+tr.tot td{font-weight:700;background:var(--soft)}
+tr.grp td{background:#eef1f7;font-weight:700;font-size:14px}
+td.acts{white-space:nowrap;text-align:right}
+td .multi div{white-space:nowrap}
+.badge{display:inline-block;font-size:11px;padding:1px 7px;border-radius:999px;background:var(--pri-weak);color:var(--pri);margin-left:4px;white-space:nowrap;vertical-align:1px}
+.badge.gray{background:#eceff4;color:var(--sub)}
+.badge.org{background:#fdf0e6;color:#b35610}
+.stmt .ln{display:flex;justify-content:space-between;gap:10px;padding:6px 2px;border-bottom:1px dashed var(--line)}
+.stmt .ln.h{font-weight:700;border-bottom:1px solid var(--ink);margin-top:10px}
+.stmt .ln.t{font-weight:700;background:var(--soft);border-bottom:0;padding:8px 6px;border-radius:6px;margin-top:4px}
+.stmt .ln.big{font-size:18px}
+.stmt .ln .num{font-weight:inherit}
+.stmt .ln.in{padding-left:14px}
+.hbar{display:grid;grid-template-columns:minmax(80px,140px) 1fr auto;gap:8px;align-items:center;font-size:14px;margin:5px 0}
+.hbar .bar{height:16px;border-radius:4px;background:var(--exp)}
+.chart{width:100%;height:auto;display:block}
+.legend{display:flex;gap:14px;font-size:13px;color:var(--sub);margin-top:4px}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:4px;vertical-align:-1px}
+.list-item{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 4px;border-bottom:1px solid var(--line)}
+.list-item:last-child{border-bottom:0}
+.empty{text-align:center;color:var(--sub);padding:28px 10px}
+.check{display:flex;align-items:center;gap:10px;min-height:44px;cursor:pointer}
+.check input{width:22px;height:22px}
+details.help{border:1px solid var(--line);border-radius:10px;padding:0 14px;margin:8px 0;background:#fff}
+details.help summary{cursor:pointer;padding:12px 0;font-weight:700}
+details.help[open]{padding-bottom:12px}
+/* ---- ダイアログ・お知らせ ---- */
+.mask{position:fixed;inset:0;background:rgba(15,20,35,.45);z-index:100;display:flex;align-items:center;justify-content:center;padding:16px}
+.dialog{background:#fff;border-radius:16px;width:100%;max-width:560px;max-height:calc(100vh - 32px);overflow-y:auto;padding:20px}
+.dialog h3{margin:0 0 10px;font-size:19px}
+.dialog .dbody p{margin:0 0 8px;white-space:pre-line}
+.dialog .dbtns{display:flex;gap:10px;justify-content:flex-end;margin-top:18px;flex-wrap:wrap}
+.dialog .derr{color:var(--bad);font-size:14px;margin-top:8px;min-height:1em}
+#toast-root{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(24px + env(safe-area-inset-bottom));z-index:120;display:flex;flex-direction:column;gap:8px;align-items:center;width:max-content;max-width:92vw}
+@media (max-width:859px){#toast-root{bottom:calc(76px + env(safe-area-inset-bottom))}}
+.toast{background:#1c2333;color:#fff;border-radius:12px;padding:12px 16px;display:flex;gap:14px;align-items:center;box-shadow:0 6px 20px rgba(0,0,0,.25);font-size:15px}
+.toast button{background:none;border:0;color:#9ec1ff;font-weight:700;font-size:15px;cursor:pointer;padding:6px}
+@media print{.side,.bottom,.subtabs,.period,.no-print{display:none!important} main{padding:0} .card{box-shadow:none}}
+</style>
+</head>
+<body>
+<div id="app">
+  <nav class="side" id="side"></nav>
+  <main id="main"></main>
+</div>
+<nav class="bottom" id="bottom"></nav>
+<div id="modal-root"></div>
+<div id="toast-root"></div>
+
+<script>
+'use strict';
+/* =========================================================
+   会計帳簿（個人事業主向け）
+   データはこの端末の中（localStorage）だけに保存されます。
+   ========================================================= */
+const APP_VERSION = '1.1.0';
+const STORE_KEY = 'kaikei_pwa_v1';
+const UI_KEY = 'kaikei_pwa_ui';
+const OLD_KEY = 'accountingData_v5'; // パソコン版（V3.7）の保存名
+
+const FIXED = ['建物','建物附属設備','機械装置','車両運搬具','工具器具備品','一括償却資産','ソフトウェア'];
+const CAT_ORDER = ['資産','負債','純資産','収益','費用','控除資産'];
+// アプリが計算で使う科目（削除・名前変更できない）
+const CORE = {'資産':['現金','普通預金','売掛金','商品','事業主貸'],'負債':['未払金','借入金','事業主借'],'純資産':['元入金'],'収益':['売上'],'費用':['仕入','減価償却費'],'控除資産':['減価償却累計額']};
+const DEFAULT_ACCOUNTS = {
+  '資産':['現金','普通預金','売掛金','商品','前払金','建物','建物附属設備','機械装置','車両運搬具','工具器具備品','一括償却資産','ソフトウェア','事業主貸'],
+  '負債':['買掛金','未払金','借入金','預り金','未払費用','事業主借'],
+  '純資産':['元入金'],
+  '収益':['売上','雑収入'],
+  '費用':['仕入','租税公課','荷造運賃','水道光熱費','旅費交通費','通信費','広告宣伝費','接待交際費','損害保険料','修繕費','消耗品費','減価償却費','福利厚生費','給料賃金','外注工賃','利子割引料','地代家賃','貸倒金','支払手数料','車両費','新聞図書費','会議費','雑費'],
+  '控除資産':['減価償却累計額']
+};
+const DEFAULT_COST = {'地代家賃':'fixed','水道光熱費':'fixed','通信費':'fixed','損害保険料':'fixed','租税公課':'fixed','減価償却費':'fixed','給料賃金':'fixed','利子割引料':'fixed','福利厚生費':'fixed','仕入':'variable','消耗品費':'variable','支払手数料':'variable','荷造運賃':'variable','外注工賃':'variable'};
+// 消費税がかからないことが多い科目（かんたん入力で最初から「対象外」にする）
+const NONTAX_DEFAULT = ['租税公課','損害保険料','給料賃金','利子割引料','減価償却費','貸倒金','雑収入'];
+const TAX_OPTS = [['10','10%'],['8-reduced','8%（軽減）'],['0','対象外・非課税']];
+const SIMPLE_RATES = [[90,'第1種　卸売業（90%）'],[80,'第2種　小売業など（80%）'],[70,'第3種　製造業・建設業など（70%）'],[60,'第4種　飲食店業など（60%）'],[50,'第5種　サービス業など（50%）'],[40,'第6種　不動産業（40%）']];
+const TYPE_LABEL = {opening:'期首残高',depreciation:'減価償却',inventory:'棚卸',homeuse:'家事按分',closing:'旧・締め（集計外）'};
+const TYPE_RANK = {opening:0,manual:1,depreciation:2,homeuse:3,inventory:4,closing:5};
+
+/* ---------- 小道具 ---------- */
+const $ = (s, r = document) => r.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const yen = n => (Math.round(n) || 0).toLocaleString('ja-JP');
+const pad = n => String(n).padStart(2, '0');
+const todayStr = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; };
+const yOf = t => +t.date.slice(0, 4);
+const mOf = t => +t.date.slice(5, 7);
+const clone = o => JSON.parse(JSON.stringify(o));
+const parseAmt = v => { const n = parseInt(String(v ?? '').replace(/[,，\s円¥￥]/g, '').replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)), 10); return isNaN(n) ? NaN : n; };
+const rateOf = r => r === '10' ? 0.1 : (r === '8' || r === '8-reduced') ? 0.08 : 0;
+const taxLabel = e => e.isTaxable && rateOf(e.taxRate) > 0 ? (rateOf(e.taxRate) === 0.1 ? '10%' : '8%軽減') : '';
+const sum = arr => arr.reduce((s, v) => s + v, 0);
+let lastId = 0;
+function newId() { let id = Date.now(); if (id <= lastId) id = lastId + 1; lastId = id; return id; }
+
+/* ---------- データ ---------- */
+let state, view, TYPE = {};
+
+function defaultState() {
+  const accountSettings = {};
+  for (const a in DEFAULT_COST) accountSettings[a] = {costType: DEFAULT_COST[a]};
+  return {
+    version: 2, transactions: [], accounts: clone(DEFAULT_ACCOUNTS), accountSettings,
+    descriptionTemplates: [], fixedAssets: [], batchTemplates: [], homeUse: {},
+    settings: {businessName: '', taxMethod: 'exempt', simpleRate: 50, blueDeduction: 65, lastBackup: null, yayoi: yayoiDefaults()}
+  };
+}
+function defaultView() {
+  return {sec: 'home', sub: {input:'easy', books:'list', reports:'fs', closing:'fa', settings:'basic'}, year: new Date().getFullYear(), month: 'all'};
+}
+
+// 古い形式（パソコン版V3.7など）のデータも読めるように整える
+function migrateTx(tx) {
+  if (!tx || !tx.date || !Array.isArray(tx.debits) || !Array.isArray(tx.credits)) return null;
+  tx = clone(tx);
+  tx.date = String(tx.date).slice(0, 10);
+  tx.type = tx.type || 'manual';
+  const fix = e => { e.amount = Number(e.amount) || 0; e.taxRate = String(e.taxRate ?? '0'); e.taxAmount = Number(e.taxAmount) || 0; e.isTaxable = !!e.isTaxable; };
+  if (!tx.debits.some(d => d.isTaxable !== undefined) && !tx.credits.some(c => c.isTaxable !== undefined)) {
+    const paid = tx.debits.find(d => d.account === '仮払消費税等');
+    const recv = tx.credits.find(c => c.account === '仮受消費税等');
+    const mark = (list, taxAmt, taxAcc) => list.forEach(e => {
+      if (e.account === taxAcc) { e.isTaxAccount = true; return; }
+      e.isTaxable = true; e.taxAmount = taxAmt;
+      const r = Math.round(taxAmt / (e.amount || 1) * 100); e.taxRate = (r >= 7 && r <= 9) ? '8-reduced' : '10';
+    });
+    if (tx.type === 'manual' && paid) { mark(tx.debits, paid.amount, '仮払消費税等'); tx.credits.forEach(c => { c.isTaxable = false; c.taxRate = '0'; }); }
+    else if (tx.type === 'manual' && recv) { mark(tx.credits, recv.amount, '仮受消費税等'); tx.debits.forEach(d => { d.isTaxable = false; d.taxRate = '0'; }); }
+    else { [...tx.debits, ...tx.credits].forEach(e => { e.isTaxable = false; e.taxRate = '0'; }); }
+  }
+  // 税抜経理の名残（仮払・仮受消費税）を本体の科目に足して税込にする
+  const pi = tx.debits.findIndex(d => d.account === '仮払消費税等' || d.isTaxAccount);
+  if (pi !== -1) { const a = tx.debits[pi].amount; tx.debits.splice(pi, 1); const m = tx.debits.find(d => d.isTaxable) || tx.debits[0]; if (m) m.amount += a; }
+  const ri = tx.credits.findIndex(c => c.account === '仮受消費税等' || c.isTaxAccount);
+  if (ri !== -1) { const a = tx.credits[ri].amount; tx.credits.splice(ri, 1); const m = tx.credits.find(c => c.isTaxable) || tx.credits[0]; if (m) m.amount += a; }
+  tx.debits = tx.debits.filter(d => !d.isTaxAccount && d.account !== '仮払消費税等' && d.account !== '仮受消費税等');
+  tx.credits = tx.credits.filter(c => !c.isTaxAccount && c.account !== '仮受消費税等' && c.account !== '仮払消費税等');
+  [...tx.debits, ...tx.credits].forEach(e => { delete e.isTaxAccount; fix(e); });
+  if (!tx.debits.length || !tx.credits.length) return null;
+  return tx;
+}
+function normalize(s) {
+  if (!s || !Array.isArray(s.transactions)) throw new Error('会計データの形式ではありません');
+  const d = defaultState();
+  const out = Object.assign(d, s);
+  out.settings = Object.assign(defaultState().settings, s.settings || {});
+  const yd = yayoiDefaults(), ys = (s.settings && s.settings.yayoi) || {};
+  out.settings.yayoi = {acct: Object.assign(yd.acct, ys.acct || {}), tax: Object.assign(yd.tax, ys.tax || {})};
+  out.accounts = (s.accounts && Object.keys(s.accounts).length) ? clone(s.accounts) : clone(DEFAULT_ACCOUNTS);
+  for (const c of CAT_ORDER) if (!Array.isArray(out.accounts[c])) out.accounts[c] = [];
+  const all = () => Object.values(out.accounts).flat();
+  for (const c in CORE) for (const a of CORE[c]) if (!all().includes(a)) out.accounts[c].push(a);
+  out.accountSettings = s.accountSettings || defaultState().accountSettings;
+  out.descriptionTemplates = Array.isArray(s.descriptionTemplates) ? s.descriptionTemplates : [];
+  out.fixedAssets = (Array.isArray(s.fixedAssets) ? s.fixedAssets : []).map(a => ({...a, account: a.account || '工具器具備品', businessRatio: a.businessRatio ?? 100, acquisitionCost: Number(a.acquisitionCost) || 0, usefulLife: Number(a.usefulLife) || 1}));
+  out.batchTemplates = Array.isArray(s.batchTemplates) ? s.batchTemplates : [];
+  out.homeUse = s.homeUse || {};
+  out.transactions = s.transactions.map(migrateTx).filter(Boolean);
+  for (const k of ['activeTab','selectedYear','selectedMonth','app','exportedAt']) delete out[k];
+  out.version = 2;
+  lastId = Math.max(lastId, ...out.transactions.map(t => Number(t.id) || 0), ...out.fixedAssets.map(a => Number(a.id) || 0));
+  const seen = new Set();
+  for (const t of out.transactions) { if (!t.id || seen.has(t.id)) t.id = newId(); seen.add(t.id); }
+  for (const a of out.fixedAssets) if (!a.id) a.id = newId();
+  return out;
+}
+function rebuildTypes() { TYPE = {}; for (const c in state.accounts) for (const a of state.accounts[c]) TYPE[a] = c; }
+const typeOf = a => TYPE[a] || null;
+function sortTx() {
+  state.transactions.sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : ((TYPE_RANK[a.type] ?? 1) - (TYPE_RANK[b.type] ?? 1)) || (a.id - b.id));
+}
+function load() {
+  let raw = null, fromOld = false;
+  try { raw = localStorage.getItem(STORE_KEY); if (!raw) { raw = localStorage.getItem(OLD_KEY); fromOld = !!raw; } } catch (e) {}
+  try { state = raw ? normalize(JSON.parse(raw)) : defaultState(); }
+  catch (e) {
+    try { localStorage.setItem(STORE_KEY + '_broken_' + Date.now(), raw); } catch (_) {}
+    state = defaultState();
+    setTimeout(() => uiAlert('保存データが読み込めなかったため、空の状態で開きました。\nバックアップファイルがあれば「設定 → バックアップ・データ」から戻してください。'), 300);
+  }
+  view = defaultView();
+  try { const v = JSON.parse(localStorage.getItem(UI_KEY) || '{}'); if (v.sec) view.sec = v.sec; if (v.sub) Object.assign(view.sub, v.sub); } catch (e) {}
+  rebuildTypes(); sortTx();
+  if (fromOld) save();
+}
+function save() {
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
+  catch (e) { uiAlert('保存できませんでした。端末の空き容量を確認してください。\n' + e.message); }
+}
+function saveView() { try { localStorage.setItem(UI_KEY, JSON.stringify({sec: view.sec, sub: view.sub})); } catch (e) {} }
+if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+
+/* ---------- 仕訳を作る ---------- */
+// 税込経理。消費税の対象になる側（収益・費用・固定資産）に税額の情報を持たせる
+function createTx(date, dAcct, cAcct, amount, taxRate, desc, type = 'manual') {
+  const r = rateOf(taxRate), dT = typeOf(dAcct), cT = typeOf(cAcct);
+  let side = null;
+  if (r > 0) {
+    if (cT === '収益') side = 'c';
+    else if (dT === '費用' || (dT === '資産' && FIXED.includes(dAcct))) side = 'd';
+    else if (dT === '収益') side = 'd';
+    else if (cT === '費用' || (cT === '資産' && FIXED.includes(cAcct))) side = 'c';
+  }
+  const tax = side ? Math.floor(amount * r / (1 + r)) : 0;
+  const ent = (account, on) => ({account, amount, taxRate: on ? taxRate : '0', taxAmount: on ? tax : 0, isTaxable: on});
+  return {id: newId(), date, description: desc || '', debits: [ent(dAcct, side === 'd')], credits: [ent(cAcct, side === 'c')], type, taxIgnored: r > 0 && !side};
+}
+function checkTxInput(date, d, c, amount) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '')) return '日付を入れてください。';
+  if (!d || !c) return '勘定科目を選んでください。';
+  if (d === c) return '借方と貸方に同じ科目が選ばれています。';
+  if (isNaN(amount) || amount <= 0) return '金額を正しく入れてください（1円以上）。';
+  return '';
+}
+function addTxs(txs, msg) {
+  const before = JSON.stringify(state);
+  const ignored = txs.some(t => t.taxIgnored);
+  txs.forEach(t => delete t.taxIgnored);
+  state.transactions.push(...txs);
+  sortTx(); save(); render();
+  toast(msg + (ignored ? '（この組み合わせは消費税の対象外として登録）' : ''), () => restore(before));
+}
+function restore(json) { state = JSON.parse(json); rebuildTypes(); save(); render(); toast('元に戻しました'); }
+// 取り消しできる変更
+function change(fn, msg) { const before = JSON.stringify(state); fn(); rebuildTypes(); sortTx(); save(); render(); if (msg) toast(msg, () => restore(before)); }
+
+/* ---------- 集計 ---------- */
+const calcTxs = () => state.transactions.filter(t => t.type !== 'closing');
+const txsIn = (y, m) => calcTxs().filter(t => yOf(t) === y && (m === 'all' || mOf(t) === m));
+const txsYTD = (y, m) => calcTxs().filter(t => yOf(t) === y && mOf(t) <= (m === 'all' ? 12 : m));
+function flows(txs) {
+  const b = {};
+  for (const t of txs) {
+    for (const e of t.debits) (b[e.account] = b[e.account] || {d: 0, c: 0}).d += e.amount;
+    for (const e of t.credits) (b[e.account] = b[e.account] || {d: 0, c: 0}).c += e.amount;
+  }
+  return b;
+}
+function net(a, f) { const x = f[a]; if (!x) return 0; const t = typeOf(a); return (t === '資産' || t === '費用') ? x.d - x.c : x.c - x.d; }
+function pl(f) {
+  const rev = state.accounts['収益'].map(a => [a, net(a, f)]).filter(r => r[1] !== 0);
+  const revenue = sum(rev.map(r => r[1]));
+  const cogs = net('仕入', f);
+  const exps = state.accounts['費用'].filter(a => a !== '仕入').map(a => [a, net(a, f)]).filter(r => r[1] !== 0);
+  const expTotal = sum(exps.map(r => r[1]));
+  return {rev, revenue, cogs, gross: revenue - cogs, exps, expTotal, profit: revenue - cogs - expTotal};
+}
+const cashAccounts = () => state.accounts['資産'].filter(a => /現金|預金/.test(a));
+function taxCalc(txs) {
+  const per = {}; let salesTax = 0, purTax = 0;
+  const add = (e, sign) => {
+    const ty = typeOf(e.account); if (!['収益','費用','資産'].includes(ty)) return;
+    const r = e.isTaxable ? rateOf(e.taxRate) : 0;
+    if (ty === '資産' && !r) return;
+    const s = per[e.account] = per[e.account] || {type: ty, g10: 0, t10: 0, g8: 0, t8: 0, non: 0};
+    if (r) { const k = r === 0.1 ? '10' : '8'; s['g' + k] += sign * e.amount; s['t' + k] += sign * (e.taxAmount || 0); if (ty === '収益') salesTax += sign * (e.taxAmount || 0); else purTax += sign * (e.taxAmount || 0); }
+    else s.non += sign * e.amount;
+  };
+  for (const t of txs) {
+    if (t.type === 'opening' || t.type === 'inventory') continue;
+    for (const e of t.debits) add(e, typeOf(e.account) === '収益' ? -1 : 1);
+    for (const e of t.credits) add(e, typeOf(e.account) === '収益' ? 1 : -1);
+  }
+  return {per, salesTax, purTax};
+}
+function taxMethods(tc) {
+  const st = Math.max(0, tc.salesTax), sr = state.settings.simpleRate;
+  return [
+    {k: 'exempt', name: '免税事業者', amt: 0, note: '消費税の申告・納税なし'},
+    {k: 'general', name: '原則課税', amt: tc.salesTax - tc.purTax, note: '預かった税 − 支払った税'},
+    {k: 'simple', name: `簡易課税（みなし仕入率${sr}%）`, amt: Math.floor(st * (1 - sr / 100)), note: `預かった税 × ${100 - sr}%`},
+    {k: 'niwari', name: '2割特例（インボイス登録した元免税事業者）', amt: Math.floor(st * 0.2), note: '預かった税 × 20%（使える年は限られます）'}
+  ];
+}
+const taxEstimate = tc => taxMethods(tc).find(m => m.k === state.settings.taxMethod) || taxMethods(tc)[0];
+
+// 減価償却（定額法。一括償却資産は3年均等）
+function depFor(a, year) {
+  const ay = +a.acquisitionDate.slice(0, 4), am = +a.acquisitionDate.slice(5, 7), cost = a.acquisitionCost;
+  if (!ay || year < ay) return {dep: 0, before: 0, end: year < ay ? null : cost};
+  const lump = a.account === '一括償却資産';
+  const rate = Math.ceil(1000 / Math.max(1, a.usefulLife) - 1e-9) / 1000;
+  let acc = 0;
+  for (let y = ay; y <= year; y++) {
+    let d;
+    if (lump) d = y - ay < 3 ? Math.floor(cost / 3) + (y - ay === 2 ? cost - Math.floor(cost / 3) * 3 : 0) : 0;
+    else d = Math.ceil(cost * rate * (y === ay ? 13 - am : 12) / 12);
+    d = Math.max(0, Math.min(d, cost - (lump ? 0 : 1) - acc));
+    if (y === year) return {dep: d, before: acc, end: cost - acc - d};
+    acc += d;
+  }
+}
+
+/* ---------- 画面のしくみ ---------- */
+const SECS = [['home','ホーム','🏠'],['input','入力','✏️'],['books','帳簿','📒'],['reports','集計','📊'],['closing','決算','📅'],['settings','設定','⚙️']];
+const SUBS = {
+  input: [['easy','かんたん入力'],['journal','振替入力'],['batch','まとめて入力']],
+  books: [['list','仕訳帳'],['ledger','総勘定元帳']],
+  reports: [['fs','決算書'],['tax','消費税'],['charts','グラフ'],['tb','試算表'],['cf','お金の流れ'],['bep','損益分岐点'],['cmp','前年くらべ']],
+  closing: [['fa','固定資産・減価償却'],['homeuse','家事按分'],['inv','棚卸'],['carry','翌年への繰越']],
+  settings: [['basic','基本設定'],['opening','期首残高'],['accounts','勘定科目'],['templates','摘要テンプレート'],['data','バックアップ・データ'],['yayoi','弥生会計へ書き出し'],['help','使い方']]
+};
+const MONTH_VIEWS = ['books.list','books.ledger','reports.fs','reports.tb','reports.tax','reports.cf'];
+const NO_YEAR = ['input.easy','input.journal','input.batch','settings.basic','settings.accounts','settings.templates','settings.data','settings.yayoi','settings.help'];
+const curKey = () => view.sec === 'home' ? 'home' : `${view.sec}.${view.sub[view.sec]}`;
+const V = {}, AFTER = {}, A = {}, CH = {}, IN = {};
+
+function go(sec, sub, push = true) {
+  view.sec = sec; if (sub) view.sub[sec] = sub;
+  if (push) history.pushState({sec, sub: view.sub[sec]}, '');
+  render(); window.scrollTo(0, 0);
+}
+window.addEventListener('popstate', e => {
+  if ($('#modal-root').innerHTML) { closeModal(null); history.pushState(e.state, ''); return; }
+  const s = e.state || {sec: 'home'}; view.sec = s.sec; if (s.sub) view.sub[s.sec] = s.sub; render(); window.scrollTo(0, 0);
+});
+
+function years() {
+  const ys = new Set(state.transactions.map(yOf)); ys.add(new Date().getFullYear()); ys.add(view.year);
+  return [...ys].filter(Boolean).sort((a, b) => b - a);
+}
+function render() {
+  const key = curKey();
+  const name = state.settings.businessName;
+  $('#side').innerHTML = `<div class="brand">会計帳簿${name ? `<small>${esc(name)}</small>` : ''}</div>` +
+    SECS.map(([k, l, i]) => `<button data-act="nav" data-sec="${k}" class="${view.sec === k && !(k === 'settings' && view.sub.settings === 'help') ? 'on' : ''}"><span class="ico">${i}</span>${l}</button>`).join('') +
+    `<hr><button data-act="nav" data-sec="settings" data-sub="help" class="${key === 'settings.help' ? 'on' : ''}"><span class="ico">❓</span>使い方</button>`;
+  $('#bottom').innerHTML = SECS.map(([k, l, i]) => `<button data-act="nav" data-sec="${k}" class="${view.sec === k ? 'on' : ''}"><span class="ico">${i}</span>${l}</button>`).join('');
+  const sec = SECS.find(s => s[0] === view.sec);
+  const subs = SUBS[view.sec];
+  let period = '';
+  if (!NO_YEAR.includes(key)) {
+    period = `<div class="period no-print"><select class="inp" style="width:auto" data-change="year">${years().map(y => `<option value="${y}" ${y === view.year ? 'selected' : ''}>${y}年</option>`).join('')}</select>`;
+    if (MONTH_VIEWS.includes(key)) period += `<div class="months"><button data-act="month" data-m="all" class="${view.month === 'all' ? 'on' : ''}">1年分</button>${Array.from({length: 12}, (_, i) => `<button data-act="month" data-m="${i + 1}" class="${view.month === i + 1 ? 'on' : ''}">${i + 1}月</button>`).join('')}</div>`;
+    period += '</div>';
+  }
+  let body;
+  try { body = (V[key] || V.home)(); }
+  catch (e) { console.error(e); body = `<div class="card note bad">画面の表示でエラーが起きました：${esc(e.message)}</div>`; }
+  $('#main').innerHTML = `<div class="top"><h1>${key === 'settings.help' ? '使い方' : sec[1]}</h1></div>` +
+    (subs ? `<div class="subtabs no-print">${subs.map(([k, l]) => `<button data-act="nav" data-sec="${view.sec}" data-sub="${k}" class="${view.sub[view.sec] === k ? 'on' : ''}">${l}</button>`).join('')}</div>` : '') +
+    period + `<section id="content">${body}</section>`;
+  if (AFTER[key]) AFTER[key]();
+  saveView();
+}
+
+// まとめて操作を受け付ける
+document.addEventListener('click', e => {
+  const el = e.target.closest('[data-act]'); if (!el || el.closest('#modal-root')) return;
+  const f = A[el.dataset.act]; if (f) { e.preventDefault(); f(el, e); }
+});
+document.addEventListener('change', e => { const el = e.target.closest('[data-change]'); if (el && !el.closest('#modal-root') && CH[el.dataset.change]) CH[el.dataset.change](el, e); });
+document.addEventListener('input', e => { const el = e.target.closest('[data-input]'); if (el && !el.closest('#modal-root') && IN[el.dataset.input]) IN[el.dataset.input](el, e); });
+document.addEventListener('submit', e => { const f = e.target; if (f.dataset.form && A[f.dataset.form]) { e.preventDefault(); A[f.dataset.form](f, e); } });
+
+A.nav = el => go(el.dataset.sec, el.dataset.sub);
+A.month = el => { view.month = el.dataset.m === 'all' ? 'all' : +el.dataset.m; render(); };
+CH.year = el => { view.year = +el.value; render(); };
+
+/* ---------- ダイアログ・お知らせ ---------- */
+let modalResolve = null;
+function closeModal(v) { $('#modal-root').innerHTML = ''; const r = modalResolve; modalResolve = null; if (r) r(v); }
+function modal({title, body, buttons, wide}) {
+  if (modalResolve) closeModal(null);
+  return new Promise(res => {
+    modalResolve = res;
+    const root = $('#modal-root');
+    root.innerHTML = `<div class="mask"><div class="dialog" role="dialog" aria-modal="true" ${wide ? 'style="max-width:720px"' : ''}><h3>${title}</h3><div class="dbody">${body}</div><div class="derr"></div><div class="dbtns">${buttons.map((b, i) => `<button class="btn ${b.cls || ''}" data-mi="${i}">${b.label}</button>`).join('')}</div></div></div>`;
+    root.querySelectorAll('[data-mi]').forEach(btn => btn.onclick = () => {
+      const b = buttons[+btn.dataset.mi];
+      if (b.collect) { const out = b.collect(root); if (out && out.error) { root.querySelector('.derr').textContent = out.error; return; } closeModal(out); }
+      else closeModal(b.value);
+    });
+    const first = root.querySelector('input:not([type=hidden]),select'); if (first && first.id === 'dlg-in') first.focus();
+  });
+}
+const uiAlert = (msg, title = 'お知らせ') => modal({title, body: `<p>${msg}</p>`, buttons: [{label: '閉じる', cls: 'pri', value: true}]});
+const uiConfirm = (msg, {ok = 'OK', danger = false, title = '確認'} = {}) => modal({title, body: `<p>${msg}</p>`, buttons: [{label: 'やめる', value: false}, {label: ok, cls: danger ? 'danger' : 'pri', value: true}]});
+const uiPrompt = (msg, def = '') => modal({title: '入力', body: `<p>${msg}</p><input id="dlg-in" class="inp" value="${esc(def)}">`, buttons: [{label: 'やめる', value: null}, {label: 'OK', cls: 'pri', collect: r => r.querySelector('#dlg-in').value}]});
+function toast(msg, undo) {
+  const el = document.createElement('div'); el.className = 'toast';
+  el.innerHTML = `<span>${esc(msg)}</span>${undo ? '<button>元に戻す</button>' : ''}`;
+  $('#toast-root').appendChild(el);
+  if (undo) el.querySelector('button').onclick = () => { el.remove(); undo(); };
+  setTimeout(() => el.remove(), undo ? 7000 : 2600);
+}
+
+/* ---------- 共通の部品 ---------- */
+function acctOptions(sel, cats = ['資産','負債','純資産','収益','費用'], blank = '選んでください') {
+  let h = blank ? `<option value="">${blank}</option>` : '';
+  for (const c of cats) { const l = state.accounts[c] || []; if (!l.length) continue; h += `<optgroup label="${c}">${l.map(a => `<option value="${esc(a)}" ${a === sel ? 'selected' : ''}>${esc(a)}</option>`).join('')}</optgroup>`; }
+  return h;
+}
+const taxSelect = (sel, attrs = '') => `<select class="inp" ${attrs}>${TAX_OPTS.map(([v, l]) => `<option value="${v}" ${(sel === '8' ? '8-reduced' : sel) === v ? 'selected' : ''}>${l}</option>`).join('')}</select>`;
+const tplOptions = () => `<option value="">テンプレート…</option>${state.descriptionTemplates.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('')}`;
+function txLines(list) { return `<div class="multi">${list.map(e => `<div>${esc(e.account)}${taxLabel(e) ? `<span class="badge">${taxLabel(e)}</span>` : ''}</div>`).join('')}</div>`; }
+function txAmts(list) { return `<div class="multi">${list.map(e => `<div>${yen(e.amount)}</div>`).join('')}</div>`; }
+function niceStep(x) { if (x <= 0) return 1; const p = 10 ** Math.floor(Math.log10(x)); const f = x / p; return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * p; }
+const shortYen = v => Math.abs(v) >= 10000 ? (v / 10000).toLocaleString('ja-JP', {maximumFractionDigits: 1}) + '万' : String(v);
+function barChart(labels, series, h = 240) {
+  const W = 640, H = h, L = 52, R = 8, T = 10, B = 26;
+  const vals = series.flatMap(s => s.data);
+  let max = Math.max(0, ...vals), min = Math.min(0, ...vals); if (max === min) max = min + 10000;
+  const step = niceStep((max - min) / 4); max = Math.ceil(max / step) * step; min = Math.floor(min / step) * step;
+  const y = v => T + (max - v) / (max - min) * (H - T - B);
+  const gw = (W - L - R) / labels.length, bw = Math.min(20, (gw - 6) / series.length);
+  let s = '';
+  for (let v = min; v <= max + 1e-6; v += step) s += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="${v === 0 ? '#9aa3b5' : '#e6e9f0'}"/><text x="${L - 6}" y="${y(v) + 4}" font-size="11" text-anchor="end" fill="#5d6678">${shortYen(v)}</text>`;
+  labels.forEach((lb, i) => {
+    const x0 = L + i * gw + (gw - bw * series.length) / 2;
+    series.forEach((se, k) => { const v = se.data[i] || 0; if (!v) return; s += `<rect x="${x0 + k * bw}" y="${Math.min(y(v), y(0))}" width="${bw - 2}" height="${Math.max(1, Math.abs(y(v) - y(0)))}" rx="2" fill="${se.color}"><title>${lb} ${se.name}：${yen(v)}円</title></rect>`; });
+    s += `<text x="${L + i * gw + gw / 2}" y="${H - 8}" font-size="11" text-anchor="middle" fill="#5d6678">${lb}</text>`;
+  });
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img">${s}</svg><div class="legend">${series.map(se => `<span><i style="background:${se.color}"></i>${se.name}</span>`).join('')}</div>`;
+}
+const MONTH_LABELS = Array.from({length: 12}, (_, i) => `${i + 1}月`);
+function monthly(y) {
+  const out = {sales: [], exp: [], profit: []};
+  for (let m = 1; m <= 12; m++) { const p = pl(flows(txsIn(y, m).filter(t => t.type === 'manual'))); out.sales.push(p.revenue); out.exp.push(p.cogs + p.expTotal); out.profit.push(p.profit); }
+  return out;
+}
+const periodLabel = () => view.month === 'all' ? `${view.year}年` : `${view.year}年${view.month}月`;
+
+/* =========================================================
+   ホーム
+   ========================================================= */
+let installEvt = null;
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvt = e; if (view && view.sec === 'home') render(); });
+A.install = async () => { if (!installEvt) return; installEvt.prompt(); try { await installEvt.userChoice; } catch (e) {} installEvt = null; render(); };
+
+V.home = () => {
+  const y = view.year, p = pl(flows(txsIn(y, 'all')));
+  const bal = flows(txsYTD(y, 12));
+  const cash = sum(cashAccounts().map(a => net(a, bal)));
+  const te = taxEstimate(taxCalc(txsIn(y, 'all')));
+  const mo = monthly(y);
+  const recent = calcTxs().filter(t => t.type === 'manual').sort((a, b) => b.id - a.id).slice(0, 6);
+  const lb = state.settings.lastBackup, days = lb ? Math.floor((Date.now() - lb) / 86400000) : null;
+  let h = '';
+  if (!state.transactions.length) h += `<div class="card"><h2>はじめまして</h2><p>日々の売上や経費を入れるだけで、帳簿・決算書・消費税の見込みまで作れます。データはこのタブレットの中だけに保存されます。</p>
+    <ol class="small"><li>「設定 → 基本設定」で屋号・消費税の方法を選ぶ</li><li>「設定 → 期首残高」で年はじめの現金・預金の残高を入れる</li><li>「入力 → かんたん入力」で売上・経費を入れる</li></ol>
+    <div class="row"><button class="btn pri" data-act="nav" data-sec="settings" data-sub="basic">基本設定へ</button><button class="btn" data-act="nav" data-sec="settings" data-sub="help">使い方を見る</button><button class="btn" data-act="nav" data-sec="settings" data-sub="data">前のアプリから引っ越す</button></div></div>`;
+  else if (days === null || days >= 30) h += `<div class="card note warn" style="margin-bottom:14px">💾 ${days === null ? 'まだバックアップをとっていません。' : `最後のバックアップから${days}日たっています。`}タブレットの故障や設定変更でデータが消えることがあります。<div class="row" style="margin-top:8px"><button class="btn sm" data-act="backupShare">バックアップを送る</button><button class="btn sm" data-act="backupSave">ファイルに保存</button></div></div>`;
+  if (installEvt) h += `<div class="card note ok" style="margin-bottom:14px">📲 ホーム画面に置くと、アプリのように全画面で開けます。<div style="margin-top:8px"><button class="btn sm ok" data-act="install">ホーム画面に追加</button></div></div>`;
+  h += `<div class="row" style="margin-bottom:14px"><button class="btn pri" style="flex:1" data-act="quick" data-kind="income">＋ 売上・収入を入れる</button><button class="btn" style="flex:1;border-color:var(--exp);color:#b35610" data-act="quick" data-kind="expense">＋ 経費を入れる</button></div>`;
+  h += `<div class="kpis">
+    <div class="kpi"><div class="l">${y}年の売上・収入</div><div class="v">${yen(p.revenue)}<small>円</small></div></div>
+    <div class="kpi"><div class="l">仕入・経費</div><div class="v">${yen(p.cogs + p.expTotal)}<small>円</small></div></div>
+    <div class="kpi"><div class="l">もうけ（所得・控除前）</div><div class="v ${p.profit < 0 ? 'minus' : ''}">${yen(p.profit)}<small>円</small></div></div>
+    <div class="kpi"><div class="l">現金・預金の残高</div><div class="v">${yen(cash)}<small>円</small></div></div>
+    <div class="kpi"><div class="l">消費税の見込み</div><div class="v">${state.settings.taxMethod === 'exempt' ? '<span style="font-size:16px">免税</span>' : yen(te.amt) + '<small>円</small>'}</div></div>
+  </div>`;
+  h += `<div class="grid g2"><div class="card"><h2>月ごとの売上と経費（${y}年）</h2>${barChart(MONTH_LABELS, [{name: '売上・収入', color: '#2457c5', data: mo.sales}, {name: '仕入・経費', color: '#e0782b', data: mo.exp}])}<p class="small muted">決算整理（減価償却・家事按分・棚卸）は含みません。</p></div>
+    <div class="card"><h2>最近入れた取引</h2>${recent.length ? recent.map(t => `<div class="list-item"><div><div class="small muted">${t.date}</div><div>${esc(t.debits[0].account)} ／ ${esc(t.credits[0].account)}</div><div class="small muted">${esc(t.description)}</div></div><div class="num"><b>${yen(t.debits[0].amount)}</b>円</div></div>`).join('') : '<div class="empty">まだありません</div>'}
+    <div class="row end" style="margin-top:8px"><button class="btn ghost" data-act="nav" data-sec="books" data-sub="list">仕訳帳を見る →</button></div></div></div>`;
+  return h;
+};
+A.quick = el => { easy.kind = el.dataset.kind; go('input', 'easy'); };
+
+/* =========================================================
+   入力：かんたん入力
+   ========================================================= */
+const INC_METHODS = [['普通預金','口座に入金'],['現金','現金で受け取り'],['売掛金','あとで入金（売掛）'],['事業主貸','個人の口座に入金']];
+const EXP_METHODS = [['現金','現金で払った'],['普通預金','口座から（振込・引落）'],['未払金','カード・後払い'],['事業主借','個人のお金で払った']];
+const easy = {kind: 'expense', date: '', inc: {account: '売上', method: '普通預金'}, exp: {account: '', method: '現金'}, tax: '10', amount: '', desc: ''};
+function defaultTaxFor(a) { const s = state.accountSettings[a]; if (s && s.tax) return s.tax; return NONTAX_DEFAULT.includes(a) ? '0' : '10'; }
+V['input.easy'] = () => {
+  if (!easy.date) easy.date = todayStr();
+  const inc = easy.kind === 'income', cur = inc ? easy.inc : easy.exp;
+  const cats = inc ? ['収益'] : ['費用'];
+  const methods = (inc ? INC_METHODS : EXP_METHODS).filter(([a]) => typeOf(a));
+  const otherAccts = ['資産','負債'].flatMap(c => state.accounts[c]).filter(a => !methods.some(m => m[0] === a) && !FIXED.includes(a));
+  const recent = state.transactions.filter(t => t.type === 'manual').sort((a, b) => b.id - a.id).slice(0, 5);
+  return `<div class="grid g2"><div class="card"><form data-form="easySubmit" autocomplete="off">
+    <div class="kind"><button type="button" class="inc ${inc ? 'on' : ''}" data-act="easyKind" data-kind="income">売上・収入</button><button type="button" class="exp ${!inc ? 'on' : ''}" data-act="easyKind" data-kind="expense">経費・仕入</button></div>
+    <label class="f">日付</label><input type="date" class="inp" id="e-date" value="${easy.date}" data-change="easyField" data-k="date">
+    <label class="f">${inc ? '何の収入？' : '何に使った？（勘定科目）'}</label>
+    <select class="inp" id="e-acct" data-change="easyAcct">${acctOptions(cur.account, cats)}</select>
+    ${!inc ? `<div class="chips" style="margin-top:6px">${['消耗品費','旅費交通費','通信費','接待交際費','仕入','水道光熱費','車両費','支払手数料'].filter(typeOf).map(a => `<button type="button" data-act="easyChip" data-a="${esc(a)}">${esc(a)}</button>`).join('')}</div>` : ''}
+    <label class="f">${inc ? 'どこに入った？' : 'どうやって払った？'}</label>
+    <div class="seg">${methods.map(([a, l]) => `<button type="button" data-act="easyMethod" data-a="${esc(a)}" class="${cur.method === a ? 'on' : ''}">${l}</button>`).join('')}</div>
+    <select class="inp" style="margin-top:8px" data-change="easyMethodSel"><option value="">ほかの科目で${inc ? '受け取った' : '払った'}…</option>${otherAccts.map(a => `<option value="${esc(a)}" ${cur.method === a ? 'selected' : ''}>${esc(a)}</option>`).join('')}</select>
+    <label class="f">金額（税込）</label>
+    <input class="inp big" id="e-amt" inputmode="numeric" placeholder="0" value="${esc(easy.amount)}" data-input="easyAmt">
+    <label class="f">消費税</label>
+    <div class="seg">${TAX_OPTS.map(([v, l]) => `<button type="button" data-act="easyTax" data-v="${v}" class="${easy.tax === v ? 'on' : ''}">${l}</button>`).join('')}</div>
+    <div class="small muted" id="e-taxinfo" style="margin-top:6px"></div>
+    <label class="f">摘要（取引先・内容）</label>
+    <div class="row" style="flex-wrap:nowrap"><input class="inp" id="e-desc" value="${esc(easy.desc)}" placeholder="例：○○商店　文房具" data-input="easyDesc"><select class="inp" style="width:auto;max-width:40%" data-change="easyTpl">${tplOptions()}</select></div>
+    <div style="margin-top:18px"><button class="btn ${inc ? 'pri' : 'ok'} wide" style="min-height:58px;font-size:18px">登録する</button></div>
+    </form></div>
+    <div class="card"><h2>最近入れた取引</h2>${recent.length ? recent.map(t => `<div class="list-item"><div><div class="small muted">${t.date}</div><div>${esc(t.debits[0].account)} ／ ${esc(t.credits[0].account)}${taxLabel(t.debits[0]) || taxLabel(t.credits[0]) ? `<span class="badge">${taxLabel(t.debits[0]) || taxLabel(t.credits[0])}</span>` : ''}</div><div class="small muted">${esc(t.description)}</div></div><div style="text-align:right"><div class="num"><b>${yen(t.debits[0].amount)}</b>円</div><button class="btn ghost sm" data-act="editTx" data-id="${t.id}">直す</button></div></div>`).join('') : '<div class="empty">まだありません</div>'}
+    <div class="note small" style="margin-top:12px">💡 仕訳（借方・貸方）は自動で作られます。<br>経費：<b>科目</b> ／ <b>払い方</b>　売上：<b>入金先</b> ／ <b>売上</b></div></div></div>`;
+};
+AFTER['input.easy'] = () => updateEasyTax();
+function updateEasyTax() {
+  const el = $('#e-taxinfo'); if (!el) return;
+  const amt = parseAmt(easy.amount), r = rateOf(easy.tax);
+  el.textContent = amt > 0 && r ? `うち消費税 ${yen(Math.floor(amt * r / (1 + r)))}円（税抜 ${yen(amt - Math.floor(amt * r / (1 + r)))}円）` : '';
+}
+A.easyKind = el => { easy.kind = el.dataset.kind; const cur = easy.kind === 'income' ? easy.inc : easy.exp; easy.tax = cur.account ? defaultTaxFor(cur.account) : '10'; render(); };
+CH.easyField = el => { easy[el.dataset.k] = el.value; };
+function setEasyAcct(a) { const cur = easy.kind === 'income' ? easy.inc : easy.exp; cur.account = a; if (a) easy.tax = defaultTaxFor(a); render(); }
+CH.easyAcct = el => setEasyAcct(el.value);
+A.easyChip = el => setEasyAcct(el.dataset.a);
+A.easyMethod = el => { (easy.kind === 'income' ? easy.inc : easy.exp).method = el.dataset.a; render(); };
+CH.easyMethodSel = el => { if (el.value) { (easy.kind === 'income' ? easy.inc : easy.exp).method = el.value; render(); } };
+A.easyTax = el => { easy.tax = el.dataset.v; render(); };
+IN.easyAmt = el => { easy.amount = el.value; updateEasyTax(); };
+IN.easyDesc = el => { easy.desc = el.value; };
+CH.easyTpl = el => { if (el.value) { easy.desc = el.value; $('#e-desc').value = el.value; } el.value = ''; };
+A.easySubmit = () => {
+  const inc = easy.kind === 'income', cur = inc ? easy.inc : easy.exp;
+  easy.date = $('#e-date').value; easy.amount = $('#e-amt').value; easy.desc = $('#e-desc').value;
+  const amt = parseAmt(easy.amount);
+  const d = inc ? cur.method : cur.account, c = inc ? cur.account : cur.method;
+  const err = checkTxInput(easy.date, d, c, amt); if (err) { uiAlert(err); return; }
+  const acc = cur.account; state.accountSettings[acc] = Object.assign(state.accountSettings[acc] || {}, {tax: easy.tax});
+  const tx = createTx(easy.date, d, c, amt, easy.tax, easy.desc.trim());
+  easy.amount = ''; easy.desc = '';
+  addTxs([tx], `${inc ? '売上' : '経費'} ${yen(amt)}円を登録しました`);
+  setTimeout(() => { const a = $('#e-amt'); if (a) a.focus(); }, 50);
+};
+
+/* =========================================================
+   入力：振替入力（複式でそのまま）
+   ========================================================= */
+const PRESETS = [
+  ['売掛金が入金された','普通預金','売掛金','売掛金の入金'],
+  ['カード代が引き落とされた','未払金','普通預金','カード代金の引落し'],
+  ['現金を口座に預けた','普通預金','現金','預け入れ'],
+  ['口座から現金を引き出した','現金','普通預金','引き出し'],
+  ['事業の口座から生活費を出した','事業主貸','普通預金','生活費'],
+  ['個人のお金を事業に入れた','普通預金','事業主借','事業資金の入金'],
+  ['借入金を返した（元金）','借入金','普通預金','借入金返済'],
+  ['買掛金を支払った','買掛金','普通預金','買掛金の支払い']
+];
+const jr = {date: '', d: '', c: '', amount: '', tax: '0', desc: ''};
+V['input.journal'] = () => {
+  if (!jr.date) jr.date = todayStr();
+  return `<div class="grid g2"><div class="card"><h2>振替入力</h2><form data-form="jrSubmit" autocomplete="off">
+    <label class="f">日付</label><input type="date" class="inp" id="j-date" value="${jr.date}">
+    <div class="grid" style="grid-template-columns:1fr 1fr;gap:10px">
+      <div><label class="f">借方（左）</label><select class="inp" id="j-d">${acctOptions(jr.d)}</select><div class="small muted">資産がふえた・費用</div></div>
+      <div><label class="f">貸方（右）</label><select class="inp" id="j-c">${acctOptions(jr.c)}</select><div class="small muted">資産がへった・収益・負債</div></div>
+    </div>
+    <label class="f">金額（税込）</label><input class="inp big" id="j-amt" inputmode="numeric" placeholder="0" value="${esc(jr.amount)}">
+    <label class="f">消費税</label>${taxSelect(jr.tax, 'id="j-tax"')}
+    <label class="f">摘要</label><div class="row" style="flex-wrap:nowrap"><input class="inp" id="j-desc" value="${esc(jr.desc)}"><select class="inp" style="width:auto;max-width:40%" data-change="jrTpl">${tplOptions()}</select></div>
+    <div style="margin-top:18px"><button class="btn pri wide">登録する</button></div></form></div>
+    <div class="card"><h2>よくある取引</h2><p class="small muted">押すと左の欄に科目が入ります。金額を入れて登録してください。</p>
+    ${PRESETS.map((p, i) => `<div class="list-item"><div>${p[0]}<div class="small muted">${p[1]} ／ ${p[2]}</div></div><button class="btn sm" data-act="preset" data-i="${i}">使う</button></div>`).join('')}</div></div>`;
+};
+function readJr() { jr.date = $('#j-date').value; jr.d = $('#j-d').value; jr.c = $('#j-c').value; jr.amount = $('#j-amt').value; jr.tax = $('#j-tax').value; jr.desc = $('#j-desc').value; }
+A.preset = el => { readJr(); const p = PRESETS[+el.dataset.i]; if (!typeOf(p[1]) || !typeOf(p[2])) { uiAlert(`「${p[1]}」か「${p[2]}」の科目がありません。設定で追加してください。`); return; } jr.d = p[1]; jr.c = p[2]; jr.tax = '0'; jr.desc = p[3]; render(); setTimeout(() => $('#j-amt') && $('#j-amt').focus(), 50); };
+CH.jrTpl = el => { if (el.value) $('#j-desc').value = el.value; el.value = ''; };
+A.jrSubmit = () => {
+  readJr(); const amt = parseAmt(jr.amount);
+  const err = checkTxInput(jr.date, jr.d, jr.c, amt); if (err) { uiAlert(err); return; }
+  const tx = createTx(jr.date, jr.d, jr.c, amt, jr.tax, jr.desc.trim());
+  jr.amount = ''; jr.desc = '';
+  addTxs([tx], `仕訳を登録しました（${yen(amt)}円）`);
+};
+
+/* =========================================================
+   入力：まとめて入力
+   ========================================================= */
+let batchRows = [], batchDate = '';
+const newRow = (o = {}) => ({rid: newId(), date: batchDate || todayStr(), debit: '', credit: '', amount: '', taxRate: '0', description: '', ...o});
+V['input.batch'] = () => {
+  if (!batchDate) batchDate = todayStr();
+  if (!batchRows.length) batchRows.push(newRow());
+  return `<div class="card"><h2>まとめて入力</h2><p class="small muted">毎月の家賃・通信費など、決まった取引を一度に登録できます。よく使う組み合わせは「テンプレート」として保存できます。</p>
+    <div class="row" style="margin-bottom:10px"><select class="inp" style="width:auto;min-width:200px" id="b-tpl"><option value="">テンプレートを選ぶ…</option>${state.batchTemplates.map(t => `<option value="${t.id}">${esc(t.name)}（${t.entries.length}行）</option>`).join('')}</select>
+      <button class="btn sm" data-act="batchLoad">呼び出す</button><button class="btn sm" data-act="batchSaveTpl">いまの行を保存</button><button class="btn sm ghost" style="color:var(--bad)" data-act="batchDelTpl">選んだテンプレートを削除</button></div>
+    <div class="row" style="margin-bottom:12px"><span class="small">全部の行の日付を</span><input type="date" class="inp" style="width:auto" id="b-date" value="${batchDate}"><button class="btn sm" data-act="batchDateAll">にそろえる</button></div>
+    <div class="tbl-wrap"><table><thead><tr><th>日付</th><th>借方</th><th>貸方</th><th>金額（税込）</th><th>消費税</th><th>摘要</th><th></th></tr></thead><tbody>
+    ${batchRows.map(r => `<tr data-rid="${r.rid}">
+      <td><input type="date" class="inp" style="min-width:150px" value="${r.date}" data-change="brow" data-f="date"></td>
+      <td><select class="inp" style="min-width:130px" data-change="brow" data-f="debit">${acctOptions(r.debit, undefined, '選ぶ')}</select></td>
+      <td><select class="inp" style="min-width:130px" data-change="brow" data-f="credit">${acctOptions(r.credit, undefined, '選ぶ')}</select></td>
+      <td><input class="inp" style="min-width:110px;text-align:right" inputmode="numeric" value="${esc(r.amount)}" data-input="brow" data-f="amount"></td>
+      <td>${taxSelect(r.taxRate, 'style="min-width:120px" data-change="brow" data-f="taxRate"')}</td>
+      <td><input class="inp" style="min-width:160px" value="${esc(r.description)}" data-input="brow" data-f="description"></td>
+      <td><button class="btn sm ghost" style="color:var(--bad)" data-act="batchDel" data-rid="${r.rid}">✕</button></td></tr>`).join('')}
+    </tbody></table></div>
+    <div class="row" style="justify-content:space-between;margin-top:14px"><button class="btn" data-act="batchAdd">＋ 行を足す</button><button class="btn pri" data-act="batchSubmit">${batchRows.length}行をまとめて登録</button></div></div>`;
+};
+const rowOf = el => batchRows.find(r => r.rid === +el.closest('tr').dataset.rid);
+CH.brow = IN.brow = el => { const r = rowOf(el); if (r) r[el.dataset.f] = el.value; };
+A.batchAdd = () => { batchRows.push(newRow()); render(); };
+A.batchDel = el => { batchRows = batchRows.filter(r => r.rid !== +el.dataset.rid); render(); };
+A.batchDateAll = () => { batchDate = $('#b-date').value; if (!batchDate) return; batchRows.forEach(r => r.date = batchDate); render(); };
+A.batchLoad = async () => {
+  const t = state.batchTemplates.find(x => x.id === +$('#b-tpl').value); if (!t) return;
+  if (batchRows.some(r => r.amount || r.debit) && !await uiConfirm(`「${esc(t.name)}」を呼び出します。いま入っている行は消えます。`)) return;
+  batchDate = $('#b-date').value || batchDate;
+  batchRows = t.entries.map(e => newRow({debit: e.debit, credit: e.credit, amount: e.amount || '', taxRate: e.taxRate || '0', description: e.description || ''}));
+  render();
+};
+A.batchSaveTpl = async () => {
+  const rows = batchRows.filter(r => r.debit || r.credit); if (!rows.length) { uiAlert('保存する行がありません。'); return; }
+  const name = await uiPrompt('テンプレートの名前（例：毎月の固定費）'); if (!name || !name.trim()) return;
+  change(() => state.batchTemplates.push({id: newId(), name: name.trim(), entries: rows.map(r => ({debit: r.debit, credit: r.credit, amount: r.amount, taxRate: r.taxRate, description: r.description}))}), 'テンプレートを保存しました');
+};
+A.batchDelTpl = async () => {
+  const id = +$('#b-tpl').value, t = state.batchTemplates.find(x => x.id === id); if (!t) { uiAlert('削除するテンプレートを選んでください。'); return; }
+  if (await uiConfirm(`テンプレート「${esc(t.name)}」を削除しますか？`, {danger: true, ok: '削除'})) change(() => state.batchTemplates = state.batchTemplates.filter(x => x.id !== id), 'テンプレートを削除しました');
+};
+A.batchSubmit = () => {
+  const txs = [];
+  for (let i = 0; i < batchRows.length; i++) {
+    const r = batchRows[i], amt = parseAmt(r.amount);
+    const err = checkTxInput(r.date, r.debit, r.credit, amt);
+    if (err) { uiAlert(`${i + 1}行目：${err}`); return; }
+    txs.push(createTx(r.date, r.debit, r.credit, amt, r.taxRate, r.description.trim()));
+  }
+  batchRows = [];
+  addTxs(txs, `${txs.length}件をまとめて登録しました`);
+};
+
+/* =========================================================
+   帳簿：仕訳帳
+   ========================================================= */
+const listFilter = {q: '', acct: ''};
+V['books.list'] = () => {
+  const q = listFilter.q.trim().toLowerCase();
+  let txs = state.transactions.filter(t => yOf(t) === view.year && (view.month === 'all' || mOf(t) === view.month));
+  if (listFilter.acct) txs = txs.filter(t => [...t.debits, ...t.credits].some(e => e.account === listFilter.acct));
+  if (q) txs = txs.filter(t => (t.description + ' ' + [...t.debits, ...t.credits].map(e => e.account + ' ' + e.amount).join(' ')).toLowerCase().includes(q));
+  const total = sum(txs.filter(t => t.type !== 'closing').map(t => sum(t.debits.map(e => e.amount))));
+  return `<div class="card"><div class="row" style="margin-bottom:12px">
+      <input class="inp" style="flex:1;min-width:180px" placeholder="🔍 摘要・科目・金額でさがす" value="${esc(listFilter.q)}" data-change="listQ">
+      <select class="inp" style="width:auto" data-change="listAcct">${acctOptions(listFilter.acct, CAT_ORDER, 'すべての科目')}</select></div>
+    <div class="small muted" style="margin-bottom:8px">${periodLabel()}　${txs.length}件　借方合計 ${yen(total)}円</div>
+    <div class="tbl-wrap"><table><thead><tr><th>日付</th><th>借方</th><th class="num">金額</th><th>貸方</th><th class="num">金額</th><th>摘要</th><th></th></tr></thead><tbody>
+    ${txs.length ? txs.map(t => `<tr><td style="white-space:nowrap">${t.date.slice(5).replace('-', '/')}</td><td>${txLines(t.debits)}</td><td class="num">${txAmts(t.debits)}</td><td>${txLines(t.credits)}</td><td class="num">${txAmts(t.credits)}</td>
+      <td>${esc(t.description)}${TYPE_LABEL[t.type] ? `<span class="badge ${t.type === 'closing' ? 'gray' : 'org'}">${TYPE_LABEL[t.type]}</span>` : ''}</td>
+      <td class="acts">${t.type === 'manual' && t.debits.length === 1 && t.credits.length === 1 ? `<button class="btn sm ghost" data-act="editTx" data-id="${t.id}">直す</button><button class="btn sm ghost" data-act="dupTx" data-id="${t.id}">複製</button>` : ''}<button class="btn sm ghost" style="color:var(--bad)" data-act="delTx" data-id="${t.id}">削除</button></td></tr>`).join('')
+      : `<tr><td colspan="7" class="empty">この期間の仕訳はありません</td></tr>`}
+    </tbody></table></div></div>`;
+};
+CH.listQ = el => { listFilter.q = el.value; render(); };
+CH.listAcct = el => { listFilter.acct = el.value; render(); };
+A.delTx = async el => {
+  const id = +el.dataset.id, t = state.transactions.find(x => x.id === id); if (!t) return;
+  const auto = t.type !== 'manual' ? '\n（自動で作った仕訳です。必要ならあとで作り直してください）' : '';
+  if (!await uiConfirm(`${t.date}　${esc(t.debits[0].account)} ／ ${esc(t.credits[0].account)}　${yen(t.debits[0].amount)}円\nこの仕訳を削除しますか？${auto}`, {danger: true, ok: '削除'})) return;
+  change(() => state.transactions = state.transactions.filter(x => x.id !== id), '仕訳を削除しました');
+};
+async function txDialog(t, dup) {
+  const d = t.debits[0], c = t.credits[0];
+  const rate = d.isTaxable ? d.taxRate : c.isTaxable ? c.taxRate : '0';
+  const r = await modal({title: dup ? '複製して登録' : '仕訳を直す', wide: true, body: `
+    <label class="f">日付</label><input type="date" class="inp" id="m-date" value="${dup ? todayStr() : t.date}">
+    <div class="grid" style="grid-template-columns:1fr 1fr;gap:10px"><div><label class="f">借方</label><select class="inp" id="m-d">${acctOptions(d.account)}</select></div><div><label class="f">貸方</label><select class="inp" id="m-c">${acctOptions(c.account)}</select></div></div>
+    <div class="grid" style="grid-template-columns:1fr 1fr;gap:10px"><div><label class="f">金額（税込）</label><input class="inp" style="text-align:right" inputmode="numeric" id="m-amt" value="${d.amount}"></div><div><label class="f">消費税</label>${taxSelect(rate, 'id="m-tax"')}</div></div>
+    <label class="f">摘要</label><input class="inp" id="m-desc" value="${esc(t.description)}">`,
+    buttons: [{label: 'やめる', value: null}, {label: dup ? '登録する' : '保存する', cls: 'pri', collect: root => {
+      const v = {date: $('#m-date', root).value, d: $('#m-d', root).value, c: $('#m-c', root).value, amt: parseAmt($('#m-amt', root).value), tax: $('#m-tax', root).value, desc: $('#m-desc', root).value.trim()};
+      const err = checkTxInput(v.date, v.d, v.c, v.amt); return err ? {error: err} : v;
+    }}]});
+  if (!r) return;
+  const nt = createTx(r.date, r.d, r.c, r.amt, r.tax, r.desc);
+  if (dup) addTxs([nt], '複製して登録しました');
+  else change(() => { nt.id = t.id; delete nt.taxIgnored; const i = state.transactions.findIndex(x => x.id === t.id); state.transactions[i] = nt; }, '仕訳を直しました');
+}
+A.editTx = el => { const t = state.transactions.find(x => x.id === +el.dataset.id); if (t) txDialog(t, false); };
+A.dupTx = el => { const t = state.transactions.find(x => x.id === +el.dataset.id); if (t) txDialog(t, true); };
+
+/* =========================================================
+   帳簿：総勘定元帳
+   ========================================================= */
+let ledgerAcct = '';
+V['books.ledger'] = () => {
+  if (!ledgerAcct || !typeOf(ledgerAcct)) ledgerAcct = '普通預金';
+  const a = ledgerAcct, ty = typeOf(a), y = view.year;
+  const sign = (ty === '資産' || ty === '費用') ? 1 : -1;
+  const yearTx = calcTxs().filter(t => yOf(t) === y && [...t.debits, ...t.credits].some(e => e.account === a));
+  const before = view.month === 'all' ? [] : yearTx.filter(t => mOf(t) < view.month);
+  const rows = view.month === 'all' ? yearTx : yearTx.filter(t => mOf(t) === view.month);
+  let bal = sign * sum(before.map(t => sum(t.debits.filter(e => e.account === a).map(e => e.amount)) - sum(t.credits.filter(e => e.account === a).map(e => e.amount))));
+  let dT = 0, cT = 0;
+  const body = rows.map(t => {
+    const dv = sum(t.debits.filter(e => e.account === a).map(e => e.amount)), cv = sum(t.credits.filter(e => e.account === a).map(e => e.amount));
+    dT += dv; cT += cv; bal += sign * (dv - cv);
+    const other = [...new Set((dv ? t.credits : t.debits).map(e => e.account).filter(x => x !== a))];
+    return `<tr><td style="white-space:nowrap">${t.date.slice(5).replace('-', '/')}</td><td>${other.length === 1 ? esc(other[0]) : '諸口'}</td><td>${esc(t.description)}${TYPE_LABEL[t.type] ? `<span class="badge org">${TYPE_LABEL[t.type]}</span>` : ''}</td><td class="num">${dv ? yen(dv) : ''}</td><td class="num">${cv ? yen(cv) : ''}</td><td class="num">${yen(bal)}</td></tr>`;
+  }).join('');
+  return `<div class="card"><div class="row" style="margin-bottom:12px"><span>勘定科目</span><select class="inp" style="width:auto;min-width:200px" data-change="ledgerAcct">${acctOptions(a, CAT_ORDER, '')}</select></div>
+    <div class="tbl-wrap"><table><thead><tr><th>日付</th><th>相手科目</th><th>摘要</th><th class="num">借方</th><th class="num">貸方</th><th class="num">残高</th></tr></thead><tbody>
+    ${view.month !== 'all' ? `<tr><td></td><td colspan="4" class="muted">前月までの繰越</td><td class="num">${yen(sign * sum(before.map(t => sum(t.debits.filter(e => e.account === a).map(e => e.amount)) - sum(t.credits.filter(e => e.account === a).map(e => e.amount)))))}</td></tr>` : ''}
+    ${body || `<tr><td colspan="6" class="empty">この期間の取引はありません</td></tr>`}
+    ${rows.length ? `<tr class="tot"><td colspan="3">合計</td><td class="num">${yen(dT)}</td><td class="num">${yen(cT)}</td><td class="num">${yen(bal)}</td></tr>` : ''}
+    </tbody></table></div></div>`;
+};
+CH.ledgerAcct = el => { ledgerAcct = el.value; render(); };
+
+/* =========================================================
+   集計：決算書（損益計算書・貸借対照表）
+   ========================================================= */
+const ln = (l, v, cls = '') => `<div class="ln ${cls}"><span>${l}</span><span class="num">${v === '' ? '' : yen(v)}</span></div>`;
+V['reports.fs'] = () => {
+  const y = view.year, m = view.month;
+  const p = pl(flows(txsIn(y, m)));
+  const blue = state.settings.blueDeduction;
+  const inv = state.transactions.some(t => t.type === 'inventory' && yOf(t) === y);
+  let plh = `<div class="stmt">` + ln('売上（収入）金額', '', 'h') + p.rev.map(r => ln(esc(r[0]), r[1], 'in')).join('') + ln('売上（収入）金額 計', p.revenue, 't');
+  plh += ln('売上原価', '', 'h') + ln('仕入（棚卸調整後）', p.cogs, 'in') + ln('差引金額（粗利）', p.gross, 't');
+  plh += ln('経費', '', 'h') + (p.exps.length ? p.exps.map(r => ln(esc(r[0]), r[1], 'in')).join('') : '<div class="ln in muted"><span>なし</span><span></span></div>') + ln('経費 計', p.expTotal, 't');
+  plh += ln(`所得金額（青色申告特別控除前）`, p.profit, 't big');
+  if (m === 'all' && blue > 0) { const ded = Math.min(blue * 10000, Math.max(0, p.profit)); plh += ln(`青色申告特別控除（${blue}万円）`, -ded, 'in') + ln('所得金額', p.profit - ded, 't big'); }
+  plh += `</div>${m === 'all' && p.cogs && !inv ? '<p class="note warn small" style="margin-top:10px">棚卸の仕訳がまだです。在庫がある場合は「決算 → 棚卸」で計上してください。</p>' : ''}`;
+
+  const f = flows(txsYTD(y, m)), pYTD = pl(f);
+  const L = c => state.accounts[c].map(a => [a, net(a, f)]).filter(r => r[1] !== 0);
+  const as = L('資産'), ca = L('控除資産'), li = L('負債'), eq = L('純資産');
+  const tA = sum(as.map(r => r[1])) - sum(ca.map(r => r[1])), tL = sum(li.map(r => r[1])), tE = sum(eq.map(r => r[1]));
+  const diff = tA - (tL + tE + pYTD.profit);
+  let bsh = `<div class="stmt">` + ln('資産', '', 'h') + as.map(r => ln(esc(r[0]), r[1], 'in')).join('') + ca.map(r => ln(`（${esc(r[0])}）`, -r[1], 'in')).join('') + ln('資産 合計', tA, 't');
+  bsh += ln('負債', '', 'h') + (li.length ? li.map(r => ln(esc(r[0]), r[1], 'in')).join('') : '<div class="ln in muted"><span>なし</span><span></span></div>') + ln('負債 合計', tL, 't');
+  bsh += ln('資本', '', 'h') + eq.map(r => ln(esc(r[0]), r[1], 'in')).join('') + ln('青色申告特別控除前の所得金額', pYTD.profit, 'in') + ln('負債・資本 合計', tL + tE + pYTD.profit, 't');
+  bsh += `</div>` + (Math.abs(diff) > 0 ? `<p class="note bad small" style="margin-top:10px">左右の合計が ${yen(diff)}円 合いません。削除した科目が仕訳に残っている可能性があります。</p>` : `<p class="note ok small" style="margin-top:10px">✓ 資産合計と負債・資本合計が一致しています</p>`);
+  return `<div class="grid g2"><div class="card"><h2>損益計算書　<span class="small muted">${periodLabel()}・税込</span></h2>${plh}</div>
+    <div class="card"><h2>貸借対照表　<span class="small muted">${m === 'all' ? `${y}年12月末` : `${y}年${m}月末`}時点・税込</span></h2>${bsh}</div></div>
+    <p class="small muted">※青色申告決算書の形に近い並びです。申告書に写すときは、科目の名前を合わせてください。<button class="btn sm ghost no-print" onclick="print()">印刷する</button></p>`;
+};
+
+/* =========================================================
+   集計：試算表
+   ========================================================= */
+V['reports.tb'] = () => {
+  const f = flows(txsYTD(view.year, view.month));
+  let tD = 0, tC = 0, rows = '';
+  for (const c of CAT_ORDER) {
+    const list = state.accounts[c].filter(a => f[a] && (f[a].d || f[a].c)); if (!list.length) continue;
+    rows += `<tr class="grp"><td colspan="4">${c}</td></tr>` + list.map(a => { tD += f[a].d; tC += f[a].c; return `<tr><td>${esc(a)}</td><td class="num">${yen(f[a].d)}</td><td class="num">${yen(f[a].c)}</td><td class="num">${yen(net(a, f))}</td></tr>`; }).join('');
+  }
+  return `<div class="card"><h2>合計残高試算表　<span class="small muted">${view.year}年1月〜${view.month === 'all' ? 12 : view.month}月</span></h2>
+    <div class="tbl-wrap"><table><thead><tr><th>勘定科目</th><th class="num">借方合計</th><th class="num">貸方合計</th><th class="num">残高</th></tr></thead><tbody>${rows || '<tr><td colspan="4" class="empty">データがありません</td></tr>'}
+    <tr class="tot"><td>合計</td><td class="num">${yen(tD)}</td><td class="num">${yen(tC)}</td><td>${tD === tC ? '<span class="plus">✓ 一致</span>' : '<span class="minus">不一致</span>'}</td></tr></tbody></table></div></div>`;
+};
+
+/* =========================================================
+   集計：消費税
+   ========================================================= */
+V['reports.tax'] = () => {
+  const tc = taxCalc(txsIn(view.year, view.month));
+  const table = (title, type) => {
+    const list = Object.entries(tc.per).filter(([, s]) => s.type === type && (s.g10 || s.g8 || s.non));
+    if (!list.length) return `<h3>${title}</h3><p class="muted small">データがありません</p>`;
+    const T = k => sum(list.map(([, s]) => s[k]));
+    return `<h3>${title}</h3><div class="tbl-wrap"><table><thead><tr><th>科目</th><th class="num">税込合計</th><th class="num">対象外</th><th class="num">10%（税込）</th><th class="num">うち消費税</th><th class="num">8%軽減（税込）</th><th class="num">うち消費税</th></tr></thead><tbody>
+      ${list.map(([a, s]) => `<tr><td>${esc(a)}</td><td class="num"><b>${yen(s.g10 + s.g8 + s.non)}</b></td><td class="num">${yen(s.non)}</td><td class="num">${yen(s.g10)}</td><td class="num">${yen(s.t10)}</td><td class="num">${yen(s.g8)}</td><td class="num">${yen(s.t8)}</td></tr>`).join('')}
+      <tr class="tot"><td>合計</td><td class="num">${yen(T('g10') + T('g8') + T('non'))}</td><td class="num">${yen(T('non'))}</td><td class="num">${yen(T('g10'))}</td><td class="num">${yen(T('t10'))}</td><td class="num">${yen(T('g8'))}</td><td class="num">${yen(T('t8'))}</td></tr></tbody></table></div>`;
+  };
+  const ms = taxMethods(tc);
+  return `<div class="card"><h2>消費税の納付見込み　<span class="small muted">${periodLabel()}</span></h2>
+    <div class="grid g3" style="margin-bottom:10px"><div class="kpi" style="background:var(--soft)"><div class="l">預かった消費税（売上）</div><div class="v">${yen(tc.salesTax)}<small>円</small></div></div><div class="kpi" style="background:var(--soft)"><div class="l">支払った消費税（経費・仕入・設備）</div><div class="v">${yen(tc.purTax)}<small>円</small></div></div></div>
+    <div class="tbl-wrap"><table><thead><tr><th>計算の方法</th><th>計算</th><th class="num">納付見込み</th></tr></thead><tbody>
+    ${ms.map(x => `<tr ${x.k === state.settings.taxMethod ? 'style="background:var(--pri-weak);font-weight:700"' : ''}><td>${x.k === state.settings.taxMethod ? '▶ ' : ''}${x.name}</td><td class="small">${x.note}</td><td class="num">${yen(x.amt)}円</td></tr>`).join('')}
+    </tbody></table></div>
+    <p class="small muted" style="margin-top:8px">▶ が「設定 → 基本設定」で選んでいる方法です。金額は帳簿の税込金額から出したおおよその額です。実際の申告では国税・地方消費税の計算や端数処理があるため、税務署や税理士に確認してください。</p></div>
+    <div class="card"><h2>科目ごとの内訳</h2>${table('売上・収入', '収益')}${table('経費・仕入', '費用')}${table('設備など（固定資産）', '資産')}</div>`;
+};
+
+/* =========================================================
+   集計：グラフ
+   ========================================================= */
+V['reports.charts'] = () => {
+  const y = view.year, mo = monthly(y), p = pl(flows(txsIn(y, 'all')));
+  const ex = [...p.exps, ['仕入（売上原価）', p.cogs]].filter(r => r[1] > 0).sort((a, b) => b[1] - a[1]);
+  const max = Math.max(1, ...ex.map(r => r[1]));
+  let cum = 0;
+  return `<div class="card"><h2>月ごとの売上と経費</h2>${barChart(MONTH_LABELS, [{name: '売上・収入', color: '#2457c5', data: mo.sales}, {name: '仕入・経費', color: '#e0782b', data: mo.exp}], 260)}</div>
+    <div class="grid g2"><div class="card"><h2>経費の内訳（${y}年）</h2>${ex.length ? ex.map(r => `<div class="hbar"><span>${esc(r[0])}</span><div class="bar" style="width:${Math.max(1, r[1] / max * 100)}%"></div><span class="num">${yen(r[1])}</span></div>`).join('') : '<div class="empty">データがありません</div>'}</div>
+    <div class="card"><h2>月ごとのもうけ</h2><div class="tbl-wrap"><table><thead><tr><th>月</th><th class="num">売上</th><th class="num">経費</th><th class="num">もうけ</th><th class="num">累計</th></tr></thead><tbody>
+    ${mo.sales.map((s, i) => { cum += mo.profit[i]; return `<tr><td>${i + 1}月</td><td class="num">${yen(s)}</td><td class="num">${yen(mo.exp[i])}</td><td class="num ${mo.profit[i] < 0 ? 'minus' : ''}">${yen(mo.profit[i])}</td><td class="num">${yen(cum)}</td></tr>`; }).join('')}
+    </tbody></table></div><p class="small muted">決算整理（減価償却など）は含みません。</p></div></div>`;
+};
+
+/* =========================================================
+   集計：お金の流れ（キャッシュ・フロー）
+   ========================================================= */
+V['reports.cf'] = () => {
+  const y = view.year, m = view.month, all = calcTxs().filter(t => yOf(t) === y);
+  const S = flows(all.filter(t => t.type === 'opening' || (m !== 'all' && mOf(t) < m)));
+  const P = flows(all.filter(t => t.type !== 'opening' && (m === 'all' || mOf(t) === m)));
+  const cashA = cashAccounts();
+  const op = [['もうけ（所得）', pl(P).profit]];
+  for (const a of state.accounts['控除資産']) { const v = net(a, P); if (v) op.push([`${a}（お金の出ない費用）`, v]); }
+  for (const a of state.accounts['資産']) if (!cashA.includes(a) && !FIXED.includes(a) && a !== '事業主貸') { const v = -net(a, P); if (v) op.push([`${a}の${v < 0 ? '増加' : '減少'}`, v]); }
+  for (const a of state.accounts['負債']) if (!['借入金','事業主借'].includes(a)) { const v = net(a, P); if (v) op.push([`${a}の${v > 0 ? '増加' : '減少'}`, v]); }
+  const inv = FIXED.filter(typeOf).map(a => [`${a}の取得・売却`, -net(a, P)]).filter(r => r[1]);
+  const fin = [];
+  for (const a of state.accounts['負債']) if (['借入金','事業主借'].includes(a)) { const v = net(a, P); if (v) fin.push([a === '借入金' ? '借入金の借入・返済' : '事業主借（個人からの入金）', v]); }
+  for (const a of state.accounts['資産']) if (a === '事業主貸') { const v = -net(a, P); if (v) fin.push(['事業主貸（生活費などへ）', v]); }
+  for (const a of state.accounts['純資産']) { const v = net(a, P); if (v) fin.push([a, v]); }
+  const sec = (t, rows) => { const s = sum(rows.map(r => r[1])); return `<div class="stmt">${ln(t, '', 'h')}${rows.map(r => ln(esc(r[0]), r[1], 'in')).join('') || '<div class="ln in muted"><span>なし</span><span></span></div>'}${ln(t + ' 計', s, 't')}</div>`; };
+  const start = sum(cashA.map(a => net(a, S))), chg = sum(cashA.map(a => net(a, P)));
+  return `<div class="card"><h2>お金の流れ　<span class="small muted">${periodLabel()}</span></h2>
+    <p class="small muted">もうけと、手元のお金（${cashA.map(esc).join('・')}）の増減がちがう理由がわかります。</p>
+    ${sec('営業（ふだんの商売）', op)}${sec('設備への投資', inv)}${sec('借入・個人とのお金のやりとり', fin)}
+    <div class="stmt" style="margin-top:12px">${ln('期間はじめのお金', start)}${ln('期間中の増減', chg, 't')}${ln('期間おわりのお金', start + chg, 't big')}</div></div>`;
+};
+
+/* =========================================================
+   集計：損益分岐点
+   ========================================================= */
+V['reports.bep'] = () => {
+  const p = pl(flows(txsIn(view.year, 'all')));
+  let fixed = 0, vari = 0; const unset = [];
+  for (const [a, v] of [['仕入', p.cogs], ...p.exps]) {
+    if (!v) continue;
+    const t = (state.accountSettings[a] || {}).costType || (a === '仕入' ? 'variable' : '');
+    if (t === 'fixed') fixed += v; else if (t === 'variable') vari += v; else { fixed += v; unset.push(a); }
+  }
+  if (!p.revenue) return `<div class="card empty">売上を入力すると分析できます。</div>`;
+  const vr = vari / p.revenue, mr = 1 - vr, bep = mr > 0 ? fixed / mr : Infinity;
+  const safety = isFinite(bep) ? (p.revenue - bep) / p.revenue : -1;
+  return `<div class="card"><h2>損益分岐点（${view.year}年）</h2>
+    <div class="kpis"><div class="kpi" style="background:var(--soft)"><div class="l">売上</div><div class="v">${yen(p.revenue)}<small>円</small></div></div>
+      <div class="kpi" style="background:var(--soft)"><div class="l">変動費（売上に比例）</div><div class="v">${yen(vari)}<small>円</small></div></div>
+      <div class="kpi" style="background:var(--soft)"><div class="l">固定費</div><div class="v">${yen(fixed)}<small>円</small></div></div>
+      <div class="kpi" style="background:var(--soft)"><div class="l">限界利益率</div><div class="v">${(mr * 100).toFixed(1)}<small>%</small></div></div></div>
+    <div class="note" style="text-align:center;padding:20px"><div>損益分岐点の売上高（これを超えると黒字）</div><div style="font-size:32px;font-weight:700;color:var(--pri)">${isFinite(bep) ? yen(Math.ceil(bep)) + ' 円' : '計算できません'}</div>
+    ${isFinite(bep) ? `<div>月あたり 約${yen(Math.ceil(bep / 12))}円　／　安全余裕率 ${(safety * 100).toFixed(1)}%${safety < 0.1 ? '（余裕が少なめ）' : ''}</div>` : ''}</div>
+    ${unset.length ? `<p class="note warn small" style="margin-top:10px">固定費か変動費か決まっていない科目（${unset.map(esc).join('、')}）は固定費として計算しています。「設定 → 勘定科目」で決められます。</p>` : ''}</div>`;
+};
+
+/* =========================================================
+   集計：前年くらべ
+   ========================================================= */
+V['reports.cmp'] = () => {
+  const y = view.year, a = pl(flows(txsIn(y, 'all'))), b = pl(flows(txsIn(y - 1, 'all')));
+  const map = r => Object.fromEntries(r);
+  const ra = map([...a.rev, ['仕入', a.cogs], ...a.exps]), rb = map([...b.rev, ['仕入', b.cogs], ...b.exps]);
+  const row = (l, x, z, cls = '') => { const d = x - z; return `<tr class="${cls}"><td>${l}</td><td class="num">${yen(x)}</td><td class="num">${yen(z)}</td><td class="num ${d > 0 ? 'plus' : d < 0 ? 'minus' : ''}">${d > 0 ? '+' : ''}${yen(d)}</td><td class="num">${z ? ((d / Math.abs(z)) * 100).toFixed(1) + '%' : '−'}</td></tr>`; };
+  const accts = [...state.accounts['収益'], '仕入', ...state.accounts['費用'].filter(x => x !== '仕入')].filter(x => ra[x] || rb[x]);
+  return `<div class="card"><h2>前年くらべ</h2><div class="tbl-wrap"><table><thead><tr><th>科目</th><th class="num">${y}年</th><th class="num">${y - 1}年</th><th class="num">増減</th><th class="num">増減率</th></tr></thead><tbody>
+    ${accts.map(x => row(esc(x), ra[x] || 0, rb[x] || 0)).join('')}
+    ${row('売上・収入 計', a.revenue, b.revenue, 'tot')}${row('仕入・経費 計', a.cogs + a.expTotal, b.cogs + b.expTotal, 'tot')}${row('所得（控除前）', a.profit, b.profit, 'tot')}
+    </tbody></table></div></div>`;
+};
+
+/* =========================================================
+   決算：固定資産・減価償却
+   ========================================================= */
+const LIFE_HINTS = [['パソコン', 4], ['普通自動車（新車）', 6], ['軽自動車（新車）', 4], ['ソフトウェア', 5], ['プリンター・コピー機', 5], ['事務机・いす（金属）', 15], ['エアコン（業務用）', 13]];
+V['closing.fa'] = () => {
+  const y = view.year;
+  const rows = state.fixedAssets.map(a => ({a, r: depFor(a, y)}));
+  const posted = state.transactions.find(t => t.type === 'depreciation' && yOf(t) === y);
+  const tot = sum(rows.map(x => x.r.dep));
+  return `<div class="grid g2"><div class="card"><h2>固定資産を登録</h2><form data-form="faAdd" autocomplete="off">
+    <label class="f">種類（勘定科目）</label><select class="inp" id="fa-acct" data-change="faAcct">${FIXED.filter(typeOf).map(a => `<option ${a === '工具器具備品' ? 'selected' : ''}>${a}</option>`).join('')}</select>
+    <label class="f">名前</label><input class="inp" id="fa-name" placeholder="例：ノートパソコン">
+    <div class="grid" style="grid-template-columns:1fr 1fr;gap:10px"><div><label class="f">使い始めた日</label><input type="date" class="inp" id="fa-date" value="${todayStr()}"></div><div><label class="f">取得価額（税込）</label><input class="inp" inputmode="numeric" id="fa-cost" style="text-align:right"></div></div>
+    <div class="grid" style="grid-template-columns:1fr 1fr;gap:10px"><div><label class="f">耐用年数（年）</label><input class="inp" inputmode="numeric" id="fa-life" value="4"></div><div><label class="f">事業で使う割合（%）</label><input class="inp" inputmode="numeric" id="fa-ratio" value="100"></div></div>
+    <div class="chips" style="margin-top:6px">${LIFE_HINTS.map(([l, n]) => `<button type="button" data-act="faLife" data-n="${n}">${l} ${n}年</button>`).join('')}</div>
+    <label class="check" style="margin-top:10px"><input type="checkbox" id="fa-buy" checked> 買ったときの仕訳もいっしょに登録する</label>
+    <div class="grid" style="grid-template-columns:1fr 1fr;gap:10px"><div><label class="f">払い方</label><select class="inp" id="fa-pay">${['普通預金','現金','未払金','事業主借'].filter(typeOf).map(a => `<option>${a}</option>`).join('')}</select></div><div><label class="f">消費税</label>${taxSelect('10', 'id="fa-tax"')}</div></div>
+    <div style="margin-top:14px"><button class="btn pri wide">登録する</button></div>
+    <p class="small muted">10万円未満のものは「消耗品費」で経費にします。青色申告なら30万円未満は全額をその年の経費にできる特例があります（年合計300万円まで）。20万円未満は「一括償却資産」（3年で均等に経費）も選べます。</p></form></div>
+    <div class="card"><h2>${y}年の減価償却</h2>
+    <div class="tbl-wrap"><table><thead><tr><th>名前</th><th class="num">取得価額</th><th class="num">${y}年の償却費</th><th class="num">年末の残り</th><th></th></tr></thead><tbody>
+    ${rows.length ? rows.map(({a, r}) => `<tr><td>${esc(a.name)}<div class="small muted">${esc(a.account)}・${a.acquisitionDate}・${a.account === '一括償却資産' ? '3年均等' : a.usefulLife + '年'}${a.businessRatio < 100 ? `・事業${a.businessRatio}%` : ''}</div></td><td class="num">${yen(a.acquisitionCost)}</td><td class="num">${r.end === null ? '<span class="muted">未取得</span>' : yen(r.dep)}</td><td class="num">${r.end === null ? '' : yen(r.end)}</td><td><button class="btn sm ghost" style="color:var(--bad)" data-act="faDel" data-id="${a.id}">削除</button></td></tr>`).join('') : '<tr><td colspan="5" class="empty">登録された資産はありません</td></tr>'}
+    ${rows.length ? `<tr class="tot"><td colspan="2">合計</td><td class="num">${yen(tot)}</td><td colspan="2"></td></tr>` : ''}</tbody></table></div>
+    ${posted ? `<p class="note ok small" style="margin-top:10px">✓ ${y}年の減価償却は計上ずみです（${yen(sum(posted.credits.map(e => e.amount)))}円）。資産を変えたときは、もう一度押すと計算し直します。</p>` : ''}
+    <div style="margin-top:12px"><button class="btn ok wide" data-act="faPost" ${tot ? '' : 'disabled'}>${y}年の減価償却を${posted ? '計上し直す' : '計上する'}（12月31日付）</button></div>
+    <p class="small muted">定額法・月割りで計算します。事業で使う割合以外の分は「事業主貸」になります。</p></div></div>`;
+};
+CH.faAcct = el => { if (el.value === '一括償却資産') $('#fa-life').value = 3; };
+A.faLife = el => { $('#fa-life').value = el.dataset.n; };
+A.faAdd = () => {
+  const a = {id: newId(), account: $('#fa-acct').value, name: $('#fa-name').value.trim(), acquisitionDate: $('#fa-date').value, acquisitionCost: parseAmt($('#fa-cost').value), usefulLife: parseAmt($('#fa-life').value), businessRatio: parseAmt($('#fa-ratio').value)};
+  if (!a.name || !a.acquisitionDate || !(a.acquisitionCost > 0) || !(a.usefulLife > 0)) { uiAlert('名前・日付・取得価額・耐用年数を入れてください。'); return; }
+  if (isNaN(a.businessRatio) || a.businessRatio < 0 || a.businessRatio > 100) { uiAlert('事業で使う割合は 0〜100 で入れてください。'); return; }
+  const buy = $('#fa-buy').checked ? createTx(a.acquisitionDate, a.account, $('#fa-pay').value, a.acquisitionCost, $('#fa-tax').value, `${a.name} 購入`) : null;
+  if (buy) delete buy.taxIgnored;
+  change(() => { state.fixedAssets.push(a); if (buy) state.transactions.push(buy); }, `「${a.name}」を登録しました${buy ? '（購入の仕訳も登録）' : ''}`);
+};
+A.faDel = async el => {
+  const a = state.fixedAssets.find(x => x.id === +el.dataset.id); if (!a) return;
+  if (await uiConfirm(`「${esc(a.name)}」を固定資産の一覧から削除しますか？\n（購入の仕訳は残ります。売却・廃棄したときは仕訳帳でも処理してください）`, {danger: true, ok: '削除'}))
+    change(() => state.fixedAssets = state.fixedAssets.filter(x => x.id !== a.id), '固定資産を削除しました');
+};
+A.faPost = async () => {
+  const y = view.year; let biz = 0, priv = 0;
+  for (const a of state.fixedAssets) { const d = depFor(a, y).dep; if (!d) continue; const b = Math.round(d * a.businessRatio / 100); biz += b; priv += d - b; }
+  if (!(biz + priv)) { uiAlert('計上する減価償却費がありません。'); return; }
+  if (!await uiConfirm(`${y}年の減価償却を計上します。\n減価償却費（経費）：${yen(biz)}円${priv ? `\n事業主貸（個人で使った分）：${yen(priv)}円` : ''}\n合計：${yen(biz + priv)}円`)) return;
+  const debits = []; if (biz) debits.push({account: '減価償却費', amount: biz, taxRate: '0', taxAmount: 0, isTaxable: false}); if (priv) debits.push({account: '事業主貸', amount: priv, taxRate: '0', taxAmount: 0, isTaxable: false});
+  change(() => {
+    state.transactions = state.transactions.filter(t => !(t.type === 'depreciation' && yOf(t) === y));
+    state.transactions.push({id: newId(), date: `${y}-12-31`, description: `${y}年 減価償却費`, debits, credits: [{account: '減価償却累計額', amount: biz + priv, taxRate: '0', taxAmount: 0, isTaxable: false}], type: 'depreciation'});
+  }, '減価償却を計上しました');
+};
+
+/* =========================================================
+   決算：家事按分
+   ========================================================= */
+const HU_SKIP = ['仕入','減価償却費','給料賃金','貸倒金','外注工賃'];
+V['closing.homeuse'] = () => {
+  const y = view.year;
+  const f = flows(calcTxs().filter(t => yOf(t) === y && t.type !== 'homeuse'));
+  const list = state.accounts['費用'].filter(a => !HU_SKIP.includes(a) && net(a, f) > 0);
+  const posted = state.transactions.find(t => t.type === 'homeuse' && yOf(t) === y);
+  let totPriv = 0;
+  const rows = list.map(a => { const v = net(a, f), pct = state.homeUse[a] ?? 100, priv = Math.round(v * (100 - pct) / 100); totPriv += priv; return `<tr><td>${esc(a)}</td><td class="num">${yen(v)}</td><td><div class="row" style="flex-wrap:nowrap;gap:4px"><input class="inp" style="width:90px;text-align:right" inputmode="numeric" value="${pct}" data-change="huPct" data-a="${esc(a)}"><span>%</span></div></td><td class="num">${yen(v - priv)}</td><td class="num ${priv ? 'minus' : ''}">${yen(priv)}</td></tr>`; }).join('');
+  return `<div class="card"><h2>家事按分（${y}年）</h2>
+    <p class="small muted">自宅兼事務所の家賃・電気代・スマホ代など、仕事と生活の両方に使ったものは、年末に仕事で使った割合だけを経費に残します。生活で使った分は「事業主貸」に振り替えます。</p>
+    <div class="chips" style="margin-bottom:10px"><span class="small muted">割合の目安：</span><span class="small">家賃＝仕事で使う部屋の面積の割合　電気代＝使用時間や部屋の割合　スマホ・ネット＝仕事で使う時間の割合</span></div>
+    <div class="tbl-wrap"><table><thead><tr><th>科目</th><th class="num">1年の合計</th><th>仕事の割合</th><th class="num">経費に残す</th><th class="num">生活の分</th></tr></thead><tbody>
+    ${rows || '<tr><td colspan="5" class="empty">経費がまだありません</td></tr>'}
+    ${rows ? `<tr class="tot"><td colspan="4">生活の分（事業主貸へ）合計</td><td class="num">${yen(totPriv)}</td></tr>` : ''}</tbody></table></div>
+    ${posted ? `<p class="note ok small" style="margin-top:10px">✓ ${y}年の家事按分は計上ずみです（${yen(sum(posted.debits.map(e => e.amount)))}円）。割合を変えたら、もう一度押してください。</p>` : ''}
+    <div style="margin-top:12px"><button class="btn ok wide" data-act="huPost" ${totPriv || posted ? '' : 'disabled'}>${y}年の家事按分を${posted ? '計上し直す' : '計上する'}（12月31日付）</button></div>
+    <p class="small muted">消費税も、生活の分は「支払った消費税」から差し引かれます。</p></div>`;
+};
+CH.huPct = el => { let v = parseAmt(el.value); if (isNaN(v)) v = 100; v = Math.max(0, Math.min(100, v)); state.homeUse[el.dataset.a] = v; save(); render(); };
+A.huPost = async () => {
+  const y = view.year;
+  const base = calcTxs().filter(t => yOf(t) === y && t.type !== 'homeuse');
+  const credits = [];
+  for (const a of state.accounts['費用']) {
+    const pct = state.homeUse[a] ?? 100; if (pct >= 100 || HU_SKIP.includes(a)) continue;
+    const bk = {}; // 税率ごとに分ける（消費税の計算のため）
+    for (const t of base) {
+      for (const e of t.debits) if (e.account === a) { const k = e.isTaxable && rateOf(e.taxRate) ? e.taxRate : '0'; (bk[k] = bk[k] || {g: 0, t: 0}).g += e.amount; bk[k].t += e.taxAmount || 0; }
+      for (const e of t.credits) if (e.account === a) { const k = e.isTaxable && rateOf(e.taxRate) ? e.taxRate : '0'; (bk[k] = bk[k] || {g: 0, t: 0}).g -= e.amount; bk[k].t -= e.taxAmount || 0; }
+    }
+    for (const k in bk) { const g = Math.round(bk[k].g * (100 - pct) / 100), tx = Math.round(bk[k].t * (100 - pct) / 100); if (g > 0) credits.push({account: a, amount: g, taxRate: k, taxAmount: k === '0' ? 0 : tx, isTaxable: k !== '0'}); }
+  }
+  const tot = sum(credits.map(e => e.amount));
+  if (!tot && !state.transactions.some(t => t.type === 'homeuse' && yOf(t) === y)) { uiAlert('振り替える金額がありません。'); return; }
+  if (!await uiConfirm(tot ? `生活の分 ${yen(tot)}円 を「事業主貸」に振り替えます。` : '割合がすべて100%なので、計上ずみの家事按分を取り消します。')) return;
+  change(() => {
+    state.transactions = state.transactions.filter(t => !(t.type === 'homeuse' && yOf(t) === y));
+    if (tot) state.transactions.push({id: newId(), date: `${y}-12-31`, description: `${y}年 家事按分`, debits: [{account: '事業主貸', amount: tot, taxRate: '0', taxAmount: 0, isTaxable: false}], credits, type: 'homeuse'});
+  }, '家事按分を計上しました');
+};
+
+/* =========================================================
+   決算：棚卸
+   ========================================================= */
+V['closing.inv'] = () => {
+  const y = view.year;
+  const book = sum(calcTxs().filter(t => yOf(t) === y && t.type !== 'inventory').map(t => sum(t.debits.filter(e => e.account === '商品').map(e => e.amount)) - sum(t.credits.filter(e => e.account === '商品').map(e => e.amount))));
+  const inv = state.transactions.filter(t => t.type === 'inventory' && yOf(t) === y);
+  const op = inv.find(t => t.description.includes('期首')), cl = inv.find(t => t.description.includes('期末'));
+  return `<div class="card"><h2>棚卸（${y}年）</h2>
+    <p class="small muted">商品を仕入れて売る仕事の方は、年末に残った在庫を数えて入れます。売れ残りの分を経費（仕入）から外し、正しい売上原価にします。</p>
+    <div class="grid g2"><div><label class="f">年はじめの在庫（期首商品棚卸高）</label><input class="inp" style="text-align:right" inputmode="numeric" id="inv-op" value="${op ? op.credits[0].amount : (book || '')}" placeholder="0"><div class="small muted">帳簿の「商品」の残高：${yen(book)}円（ふつうはこれと同じ）</div></div>
+    <div><label class="f">年末の在庫（期末商品棚卸高）</label><input class="inp" style="text-align:right" inputmode="numeric" id="inv-cl" value="${cl ? cl.debits[0].amount : ''}" placeholder="0"><div class="small muted">数えた在庫 × 仕入れたときの単価</div></div></div>
+    ${inv.length ? `<p class="note ok small" style="margin-top:10px">✓ ${y}年の棚卸は計上ずみです。金額を変えて押すと作り直します。</p>` : ''}
+    <div style="margin-top:14px"><button class="btn ok wide" data-act="invPost">${y}年の棚卸を計上する（12月31日付）</button></div>
+    <div class="note small" style="margin-top:12px">作られる仕訳：（仕入 ／ 商品）年はじめの在庫、（商品 ／ 仕入）年末の在庫<br>売上原価 ＝ 年はじめの在庫 ＋ 1年の仕入 − 年末の在庫</div></div>`;
+};
+A.invPost = async () => {
+  const y = view.year, o = parseAmt($('#inv-op').value) || 0, c = parseAmt($('#inv-cl').value) || 0;
+  if (o < 0 || c < 0) { uiAlert('金額を正しく入れてください。'); return; }
+  if (!await uiConfirm(`年はじめの在庫 ${yen(o)}円、年末の在庫 ${yen(c)}円で計上します。`)) return;
+  const e = (a, v) => [{account: a, amount: v, taxRate: '0', taxAmount: 0, isTaxable: false}];
+  change(() => {
+    state.transactions = state.transactions.filter(t => !(t.type === 'inventory' && yOf(t) === y));
+    if (o) state.transactions.push({id: newId(), date: `${y}-12-31`, description: `${y}年 期首商品棚卸高の振替`, debits: e('仕入', o), credits: e('商品', o), type: 'inventory'});
+    if (c) state.transactions.push({id: newId(), date: `${y}-12-31`, description: `${y}年 期末商品棚卸高の振替`, debits: e('商品', c), credits: e('仕入', c), type: 'inventory'});
+  }, '棚卸を計上しました');
+};
+
+/* =========================================================
+   決算：翌年への繰越
+   ========================================================= */
+function closingBalances(y) {
+  const f = flows(txsYTD(y, 12));
+  const lines = [];
+  for (const c of ['資産','負債','純資産','控除資産']) for (const a of state.accounts[c]) { if (a === '事業主貸' || a === '事業主借' || c === '純資産') continue; const v = net(a, f); if (v) lines.push({a, c, v}); }
+  const assets = sum(lines.filter(l => l.c === '資産').map(l => l.v)), other = sum(lines.filter(l => l.c !== '資産').map(l => l.v));
+  return {f, lines, capital: assets - other};
+}
+V['closing.carry'] = () => {
+  const y = view.year, {f, lines, capital} = closingBalances(y), p = pl(f);
+  const has = t => state.transactions.some(x => x.type === t && yOf(x) === y);
+  const next = state.transactions.find(t => t.type === 'opening' && yOf(t) === y + 1);
+  const chk = (ok, l, sub) => `<div class="list-item"><span>${ok ? '✅' : '⬜'} ${l}</span><button class="btn sm ghost" data-act="nav" data-sec="closing" data-sub="${sub}">開く</button></div>`;
+  const motoire = net('元入金', f);
+  return `<div class="grid g2"><div class="card"><h2>${y}年のしめくくり</h2>
+    <p class="small muted">次の順で進めると、${y + 1}年の帳簿をきれいに始められます。（必要なものだけでOK）</p>
+    ${chk(has('depreciation') || !state.fixedAssets.length, '減価償却', 'fa')}${chk(has('homeuse'), '家事按分', 'homeuse')}${chk(has('inventory') || !net('仕入', f), '棚卸（在庫がある場合）', 'inv')}
+    <div class="note small" style="margin-top:10px">決算書は「集計 → 決算書」で確認できます。</div></div>
+    <div class="card"><h2>${y + 1}年の期首残高をつくる</h2>
+    <div class="stmt">${lines.map(l => ln(`${esc(l.a)}<span class="small muted">（${l.c === '控除資産' ? '資産から引く' : l.c}）</span>`, l.v, 'in')).join('')}</div>
+    <div class="stmt" style="margin-top:10px">${ln(`${y}年の元入金`, motoire, 'in')}${ln('＋ 所得（控除前）', p.profit, 'in')}${ln('＋ 事業主借', net('事業主借', f), 'in')}${ln('− 事業主貸', net('事業主貸', f), 'in')}${ln(`${y + 1}年の元入金`, capital, 't big')}</div>
+    <p class="small muted">個人事業では、年が変わると事業主貸・事業主借はゼロに戻し、もうけと一緒に元入金にまとめます。</p>
+    ${next ? `<p class="note warn small">${y + 1}年の期首残高はすでにあります。押すと作り直します。</p>` : ''}
+    <button class="btn pri wide" data-act="carry">${y + 1}年の期首残高をつくる</button></div></div>`;
+};
+A.carry = async () => {
+  const y = view.year, {lines, capital} = closingBalances(y);
+  const exists = state.transactions.some(t => t.type === 'opening' && yOf(t) === y + 1);
+  if (!await uiConfirm(`${y}年12月31日の残高から、${y + 1}年1月1日の期首残高をつくります。${exists ? '\nいまある期首残高は置きかわります。' : ''}`)) return;
+  const debits = [], credits = [], e = (a, v) => ({account: a, amount: v, taxRate: '0', taxAmount: 0, isTaxable: false});
+  for (const l of lines) { const debitSide = l.c === '資産'; if ((l.v > 0) === debitSide) debits.push(e(l.a, Math.abs(l.v))); else credits.push(e(l.a, Math.abs(l.v))); }
+  if (capital > 0) credits.push(e('元入金', capital)); else if (capital < 0) debits.push(e('元入金', -capital));
+  change(() => {
+    state.transactions = state.transactions.filter(t => !(t.type === 'opening' && yOf(t) === y + 1));
+    if (debits.length || credits.length) state.transactions.push({id: newId(), date: `${y + 1}-01-01`, description: `${y + 1}年 期首残高（${y}年から繰越）`, debits, credits, type: 'opening'});
+    view.year = y + 1;
+  }, `${y + 1}年の期首残高をつくりました`);
+};
+
+/* =========================================================
+   設定
+   ========================================================= */
+V['settings.basic'] = () => {
+  const s = state.settings;
+  return `<div class="grid g2"><div class="card"><h2>基本設定</h2>
+    <label class="f">屋号・お名前（画面の左上に出ます）</label><input class="inp" value="${esc(s.businessName)}" data-change="setBasic" data-k="businessName">
+    <label class="f">申告の種類</label><select class="inp" data-change="setBasic" data-k="blueDeduction">${[[65,'青色申告（65万円控除：e-Tax・電子帳簿）'],[55,'青色申告（55万円控除）'],[10,'青色申告（10万円控除）'],[0,'白色申告']].map(([v, l]) => `<option value="${v}" ${s.blueDeduction === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
+    <label class="f">消費税の計算方法</label><select class="inp" data-change="setBasic" data-k="taxMethod">${[['exempt','免税事業者（消費税を納めない）'],['general','原則課税'],['simple','簡易課税'],['niwari','2割特例']].map(([v, l]) => `<option value="${v}" ${s.taxMethod === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
+    ${s.taxMethod === 'simple' ? `<label class="f">簡易課税の業種</label><select class="inp" data-change="setBasic" data-k="simpleRate">${SIMPLE_RATES.map(([v, l]) => `<option value="${v}" ${s.simpleRate === v ? 'selected' : ''}>${l}</option>`).join('')}</select>` : ''}
+    <p class="small muted">わからないときは、税務署から届いた書類や、前の年の申告書で確かめてください。</p></div>
+    <div class="card"><h2>このアプリについて</h2><p class="small">版：${APP_VERSION}<br>データの保存先：このタブレットの中だけ（インターネットには送りません）</p>
+    <p class="small muted">帳簿は税込で記録します（税込経理）。消費税の金額は、入力した税率から計算して別に記録しています。</p></div></div>`;
+};
+CH.setBasic = el => { const k = el.dataset.k; state.settings[k] = ['blueDeduction', 'simpleRate'].includes(k) ? +el.value : el.value; save(); render(); toast('保存しました'); };
+
+V['settings.opening'] = () => {
+  const y = view.year, ot = state.transactions.find(t => t.type === 'opening' && yOf(t) === y);
+  const val = a => { if (!ot) return ''; const d = ot.debits.find(e => e.account === a), c = ot.credits.find(e => e.account === a); const ty = typeOf(a); const v = (d ? d.amount : 0) - (c ? c.amount : 0); return v ? (ty === '資産' ? v : -v) : ''; };
+  const group = c => state.accounts[c].filter(a => a !== '事業主貸' && a !== '事業主借').map(a => `<div><label class="f">${esc(a)}</label><input class="inp ob" style="text-align:right" inputmode="numeric" data-a="${esc(a)}" data-c="${c}" value="${val(a)}" placeholder="0" data-input="obCalc"></div>`).join('');
+  return `<div class="card"><h2>${y}年1月1日の残高（期首残高）</h2>
+    <p class="small muted">使い始めの年だけ入れます。2年目からは「決算 → 翌年への繰越」で自動でつくれます。元入金は自動で計算します。</p>
+    ${ot && ot.description.includes('繰越') ? '<p class="note warn small">この年の期首残高は前の年から繰り越したものです。ここで保存すると上書きされます。</p>' : ''}
+    <h3>資産（お金・持ち物）</h3><div class="grid g3">${group('資産')}</div>
+    <h3>負債（借りているお金・未払い）</h3><div class="grid g3">${group('負債')}</div>
+    <h3>減価償却累計額（これまでの償却の合計）</h3><div class="grid g3">${group('控除資産')}</div>
+    <div class="stmt" style="margin-top:14px"><div class="ln t big"><span>元入金（資産 − 負債 − 累計額）</span><span class="num" id="ob-cap">0</span></div></div>
+    <div style="margin-top:14px"><button class="btn pri wide" data-act="obSave">${y}年の期首残高を保存</button></div></div>`;
+};
+function obRead() { const L = []; document.querySelectorAll('.ob').forEach(i => { const v = parseAmt(i.value); if (v) L.push({a: i.dataset.a, c: i.dataset.c, v}); }); return L; }
+const obCap = L => sum(L.map(l => l.c === '資産' ? l.v : -l.v));
+IN.obCalc = () => { $('#ob-cap').textContent = yen(obCap(obRead())); };
+AFTER['settings.opening'] = () => IN.obCalc();
+A.obSave = () => {
+  const y = view.year, L = obRead(), cap = obCap(L), e = (a, v) => ({account: a, amount: v, taxRate: '0', taxAmount: 0, isTaxable: false});
+  const debits = [], credits = [];
+  for (const l of L) { if ((l.v > 0) === (l.c === '資産')) debits.push(e(l.a, Math.abs(l.v))); else credits.push(e(l.a, Math.abs(l.v))); }
+  if (cap > 0) credits.push(e('元入金', cap)); else if (cap < 0) debits.push(e('元入金', -cap));
+  change(() => {
+    state.transactions = state.transactions.filter(t => !(t.type === 'opening' && yOf(t) === y));
+    if (debits.length && credits.length) state.transactions.push({id: newId(), date: `${y}-01-01`, description: `${y}年 期首残高`, debits, credits, type: 'opening'});
+  }, `${y}年の期首残高を保存しました`);
+};
+
+const usedAccts = () => new Set(state.transactions.flatMap(t => [...t.debits, ...t.credits].map(e => e.account)));
+const isLocked = a => Object.values(CORE).flat().includes(a) || FIXED.includes(a);
+V['settings.accounts'] = () => {
+  const used = usedAccts();
+  return `<div class="grid g2"><div class="card"><h2>勘定科目</h2>
+    ${['資産','負債','純資産','収益','費用'].map(c => `<h3>${c}</h3>${state.accounts[c].map((a, i) => `<div class="list-item"><span>${esc(a)}${used.has(a) ? '' : '<span class="badge gray">未使用</span>'}</span><span class="row" style="gap:4px;flex-wrap:nowrap">
+      ${c === '費用' ? `<select class="inp" style="width:auto;min-height:38px;padding:4px 8px;font-size:14px" data-change="costType" data-a="${esc(a)}">${[['','固定/変動？'],['fixed','固定費'],['variable','変動費']].map(([v, l]) => `<option value="${v}" ${((state.accountSettings[a] || {}).costType || '') === v ? 'selected' : ''}>${l}</option>`).join('')}</select>` : ''}
+      <button class="btn sm ghost" data-act="acctUp" data-c="${c}" data-i="${i}" ${i ? '' : 'disabled'}>↑</button>
+      ${isLocked(a) ? '' : `<button class="btn sm ghost" data-act="acctRename" data-a="${esc(a)}">名前</button><button class="btn sm ghost" style="color:var(--bad)" data-act="acctDel" data-a="${esc(a)}" data-c="${c}">削除</button>`}</span></div>`).join('')}`).join('')}</div>
+    <div class="card"><h2>科目を足す</h2><form data-form="acctAdd"><label class="f">名前</label><input class="inp" id="na-name" placeholder="例：研修費">
+    <label class="f">分類</label><select class="inp" id="na-cat">${['費用','収益','資産','負債','純資産'].map(c => `<option>${c}</option>`).join('')}</select>
+    <div style="margin-top:12px"><button class="btn pri wide">追加する</button></div></form>
+    <p class="small muted">アプリの計算に使う科目（現金・普通預金・売上・事業主貸など）は、名前の変更や削除ができません。仕訳で使っている科目は削除できません。</p></div></div>`;
+};
+CH.costType = el => { const a = el.dataset.a; state.accountSettings[a] = Object.assign(state.accountSettings[a] || {}, {costType: el.value}); save(); toast('保存しました'); };
+A.acctUp = el => { const L = state.accounts[el.dataset.c], i = +el.dataset.i; if (i < 1) return; [L[i - 1], L[i]] = [L[i], L[i - 1]]; save(); render(); };
+A.acctAdd = () => {
+  const n = $('#na-name').value.trim(), c = $('#na-cat').value;
+  if (!n) { uiAlert('名前を入れてください。'); return; }
+  if (typeOf(n)) { uiAlert('その科目はもうあります。'); return; }
+  change(() => state.accounts[c].push(n), `「${n}」を追加しました`);
+};
+A.acctDel = async el => {
+  const a = el.dataset.a, c = el.dataset.c;
+  if (usedAccts().has(a)) { uiAlert(`「${esc(a)}」は仕訳で使われているので削除できません。\n使わなくなった場合はそのまま残しておいてください。`); return; }
+  if (await uiConfirm(`「${esc(a)}」を削除しますか？`, {danger: true, ok: '削除'})) change(() => state.accounts[c] = state.accounts[c].filter(x => x !== a), '科目を削除しました');
+};
+A.acctRename = async el => {
+  const a = el.dataset.a, n = ((await uiPrompt(`「${esc(a)}」の新しい名前`, a)) || '').trim();
+  if (!n || n === a) return; if (typeOf(n)) { uiAlert('その名前の科目はもうあります。'); return; }
+  change(() => {
+    for (const c in state.accounts) state.accounts[c] = state.accounts[c].map(x => x === a ? n : x);
+    for (const t of state.transactions) for (const e of [...t.debits, ...t.credits]) if (e.account === a) e.account = n;
+    for (const t of state.batchTemplates) for (const e of t.entries) { if (e.debit === a) e.debit = n; if (e.credit === a) e.credit = n; }
+    if (state.accountSettings[a]) { state.accountSettings[n] = state.accountSettings[a]; delete state.accountSettings[a]; }
+    if (state.homeUse[a] !== undefined) { state.homeUse[n] = state.homeUse[a]; delete state.homeUse[a]; }
+    const ya = state.settings.yayoi.acct; if (ya[a] !== undefined) { ya[n] = ya[a]; delete ya[a]; }
+  }, `「${a}」を「${n}」に変えました`);
+};
+
+V['settings.templates'] = () => `<div class="grid g2"><div class="card"><h2>摘要テンプレート</h2><p class="small muted">よく使う摘要（取引先や内容）を登録しておくと、入力のときに選べます。</p>
+  ${state.descriptionTemplates.length ? state.descriptionTemplates.map((t, i) => `<div class="list-item"><span>${esc(t)}</span><button class="btn sm ghost" style="color:var(--bad)" data-act="tplDel" data-i="${i}">削除</button></div>`).join('') : '<div class="empty">まだありません</div>'}
+  <form data-form="tplAdd" class="row" style="margin-top:10px;flex-wrap:nowrap"><input class="inp" id="tpl-new" placeholder="例：NTT ドコモ 携帯料金"><button class="btn pri">追加</button></form></div>
+  <div class="card"><h2>まとめて入力のテンプレート</h2>${state.batchTemplates.length ? state.batchTemplates.map(t => `<div class="list-item"><span>${esc(t.name)}<span class="small muted">（${t.entries.length}行）</span></span><button class="btn sm ghost" style="color:var(--bad)" data-act="btplDel" data-id="${t.id}">削除</button></div>`).join('') : '<div class="empty">「入力 → まとめて入力」で保存できます</div>'}</div></div>`;
+A.tplAdd = () => { const t = $('#tpl-new').value.trim(); if (!t) return; if (state.descriptionTemplates.includes(t)) { uiAlert('同じものがあります。'); return; } change(() => state.descriptionTemplates.push(t), '追加しました'); };
+A.tplDel = el => change(() => state.descriptionTemplates.splice(+el.dataset.i, 1), '削除しました');
+A.btplDel = el => change(() => state.batchTemplates = state.batchTemplates.filter(t => t.id !== +el.dataset.id), '削除しました');
+
+/* ---------- バックアップ・データ ---------- */
+function download(text, filename, mime) {
+  const url = URL.createObjectURL(new Blob([text], {type: mime}));
+  const a = document.createElement('a'); a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+}
+async function shareFile(text, filename, mime, title) {
+  const file = new File([text], filename, {type: mime});
+  if (navigator.canShare && navigator.canShare({files: [file]})) {
+    try { await navigator.share({files: [file], title, text: title}); return true; }
+    catch (e) { if (e.name === 'AbortError') return false; }
+  }
+  await uiAlert('この画面からは直接送れませんでした。\nファイルを端末に保存するので、メールアプリなどで添付して送ってください。');
+  download(text, filename, mime); return true;
+}
+const stamp = () => { const d = new Date(); return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}`; };
+const backupText = () => JSON.stringify({app: 'kaikei-pwa', exportedAt: new Date().toISOString(), ...state});
+function markBackup() { state.settings.lastBackup = Date.now(); save(); render(); }
+A.backupSave = () => { download(backupText(), `会計バックアップ_${stamp()}.json`, 'application/json'); markBackup(); toast('バックアップを保存しました（ダウンロード）'); };
+A.backupShare = async () => { if (await shareFile(backupText(), `会計バックアップ_${stamp()}.txt`, 'text/plain', '会計アプリのバックアップ')) markBackup(); };
+function csvText(txs) {
+  const q = v => { const s = String(v ?? ''); return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+  const rows = [['日付','借方科目','借方金額','借方税区分','借方消費税','貸方科目','貸方金額','貸方税区分','貸方消費税','摘要','種類']];
+  for (const t of txs) { const n = Math.max(t.debits.length, t.credits.length); for (let i = 0; i < n; i++) { const d = t.debits[i], c = t.credits[i]; rows.push([t.date.replace(/-/g, '/'), d ? d.account : '', d ? d.amount : '', d ? taxLabel(d) || '対象外' : '', d && d.isTaxable ? d.taxAmount : '', c ? c.account : '', c ? c.amount : '', c ? taxLabel(c) || '対象外' : '', c && c.isTaxable ? c.taxAmount : '', t.description, TYPE_LABEL[t.type] || '']); } }
+  return '﻿' + rows.map(r => r.map(q).join(',')).join('\r\n');
+}
+const csvTxs = () => state.transactions.filter(t => $('#csv-range').value === 'all' || yOf(t) === view.year);
+const csvName = () => `仕訳帳_${$('#csv-range').value === 'all' ? '全期間' : view.year + '年'}_${stamp()}.csv`;
+A.csvSave = () => { download(csvText(csvTxs()), csvName(), 'text/csv'); toast('CSVを保存しました'); };
+A.csvShare = () => shareFile(csvText(csvTxs()), csvName(), 'text/csv', '仕訳帳CSV');
+CH.restore = el => {
+  const file = el.files[0]; if (!file) return;
+  const r = new FileReader();
+  r.onload = async () => {
+    el.value = '';
+    let s; try { s = normalize(JSON.parse(r.result)); } catch (e) { uiAlert('このファイルは読み込めませんでした。\n会計アプリのバックアップ（.json / .txt）を選んでください。\n' + esc(e.message)); return; }
+    const ys = [...new Set(s.transactions.map(yOf))].sort();
+    if (!await uiConfirm(`読み込むデータ：仕訳 ${s.transactions.length}件（${ys.length ? ys[0] + '〜' + ys[ys.length - 1] + '年' : '仕訳なし'}）、固定資産 ${s.fixedAssets.length}件\n\nいまのデータ（仕訳 ${state.transactions.length}件）は置きかわります。よろしいですか？`, {ok: '置きかえる', danger: true})) return;
+    change(() => { state = s; }, 'バックアップから戻しました');
+  };
+  r.readAsText(file);
+};
+A.wipe = async () => {
+  if (!await uiConfirm('すべての仕訳・設定を消して、最初の状態にもどします。\n先にバックアップをとることをおすすめします。', {danger: true, ok: '次へ'})) return;
+  const w = await uiPrompt('本当に消す場合は「けす」と入力してください。');
+  if (w !== 'けす') { if (w !== null) toast('入力がちがうため、やめました'); return; }
+  change(() => { state = defaultState(); }, 'すべてのデータを消しました');
+};
+V['settings.data'] = () => {
+  const lb = state.settings.lastBackup;
+  return `<div class="grid g2"><div class="card"><h2>バックアップ</h2>
+    <p>データはこのタブレットの中だけにあります。<b>月に1回以上</b>、パソコンやメールに送っておいてください。</p>
+    <p class="small muted">最後のバックアップ：${lb ? new Date(lb).toLocaleString('ja-JP') : 'まだありません'}</p>
+    <div class="grid" style="gap:8px"><button class="btn pri" data-act="backupShare">📤 メールなどで送る</button><button class="btn" data-act="backupSave">💾 ファイルとして保存（ダウンロード）</button></div>
+    <h3>バックアップから戻す</h3><p class="small muted">保存しておいたファイル（.json か .txt）を選ぶと、その時点の状態に戻ります。</p>
+    <input type="file" class="inp" accept=".json,.txt,application/json,text/plain" data-change="restore"></div>
+    <div class="card"><h2>仕訳帳をCSVで書き出す</h2><p class="small muted">Excelや、税理士さんへの受け渡しに使えます。</p>
+    <select class="inp" id="csv-range"><option value="year">${view.year}年の分</option><option value="all">全期間</option></select>
+    <div class="row" style="margin-top:8px"><button class="btn" data-act="csvShare">📤 送る</button><button class="btn" data-act="csvSave">💾 保存</button></div>
+    <h3>前のアプリ（パソコン版）からの引っ越し</h3>
+    <p class="small">パソコンで前の会計アプリを開き、「設定 → データのエクスポート」で保存したファイル（kaikei-app-backup-….json）を、メールやGoogleドライブでタブレットに送り、上の「バックアップから戻す」で選んでください。前の形式のまま読み込めます。</p>
+    <h3 style="color:var(--bad)">すべてのデータを消す</h3><button class="btn danger" data-act="wipe">すべて消す</button></div></div>`;
+};
+
+/* =========================================================
+   弥生会計へ書き出し（仕訳日記帳のインポート形式・25項目・Shift-JIS）
+   見本：弥生会計/見本/弥生会計入力形式.txt
+   ========================================================= */
+// 8%軽減の2つは見本に出てこないため推定の表記。弥生の登録名と照合してもらう
+const YAYOI_TAX_GUESS = {s8: '課税売上込軽減8%', p8: '課対仕入込軽減8%適格'};
+function yayoiDefaults() {
+  return {
+    acct: {'売上': '売上高', '仕入': '仕入高', '給料賃金': '給料手当'},
+    tax: {s10: '課税売上込10%', p10: '課対仕入込10%適格', none: '対象外', ...YAYOI_TAX_GUESS}
+  };
+}
+const YAYOI_TAX_LABELS = [['s10','売上 10%'],['s8','売上 8%（軽減）'],['p10','経費・仕入・設備 10%'],['p8','経費・仕入・設備 8%（軽減）'],['none','消費税なし（対象外・非課税）']];
+const ADJ_TYPES = ['depreciation','homeuse','inventory'];
+
+// Shift-JIS（CP932）への変換表を、ブラウザの読み取り機能から作る（ネット不要）
+let SJIS = null;
+function sjisMap() {
+  if (SJIS) return SJIS;
+  SJIS = new Map();
+  const dec = new TextDecoder('shift_jis'), b = new Uint8Array(2);
+  for (let c = 0xA1; c <= 0xDF; c++) SJIS.set(dec.decode(new Uint8Array([c])), c);
+  for (let l = 0x81; l <= 0xFC; l++) {
+    if (l >= 0xA0 && l < 0xE0) continue;
+    for (let t = 0x40; t <= 0xFC; t++) {
+      if (t === 0x7F) continue;
+      b[0] = l; b[1] = t;
+      const s = dec.decode(b);
+      if (s.length === 1 && s !== '�' && !SJIS.has(s)) SJIS.set(s, (l << 8) | t);
+    }
+  }
+  return SJIS;
+}
+const SJIS_FIX = {'−': '－', '〜': '～', '‖': '∥', '—': '―', '¢': '￠', '£': '￡', '¬': '￢'};
+function toSJIS(str, bad) {
+  const m = sjisMap(), out = [];
+  for (let ch of str) {
+    if (SJIS_FIX[ch]) ch = SJIS_FIX[ch];
+    const cp = ch.codePointAt(0);
+    if (cp < 0x80) { out.push(cp); continue; }
+    const v = m.get(ch);
+    if (v === undefined) { if (bad) bad.add(ch); out.push(0x3F); }
+    else if (v > 0xFF) out.push(v >> 8, v & 0xFF);
+    else out.push(v);
+  }
+  return new Uint8Array(out);
+}
+// 弥生で表せない文字があるか（変換すると「?」になる文字）
+function sjisBad(str) { const bad = new Set(); toSJIS(str, bad); return [...bad]; }
+
+const wareki = d => { const y = +d.slice(0, 4); const era = d >= '2019-05-01' ? ['R', y - 2018] : ['H', y - 1988]; return `${era[0]}.${pad(era[1])}/${d.slice(5, 7)}/${d.slice(8, 10)}`; };
+
+// 1つの仕訳を、弥生の「1行の仕訳」（借方1つ・貸方1つ）に分ける
+function splitTx(t) {
+  if (t.debits.length === 1 && t.credits.length === 1) return [{d: t.debits[0], c: t.credits[0], amt: t.debits[0].amount}];
+  if (t.debits.length === 1) return t.credits.map(c => ({d: {...t.debits[0], isTaxable: false}, c, amt: c.amount}));
+  if (t.credits.length === 1) return t.debits.map(d => ({d, c: {...t.credits[0], isTaxable: false}, amt: d.amount}));
+  const shokuchi = {account: '諸口', isTaxable: false, raw: true};
+  return [...t.debits.map(d => ({d, c: shokuchi, amt: d.amount})), ...t.credits.map(c => ({d: shokuchi, c, amt: c.amount}))];
+}
+
+function yayoiBuild(opt) {
+  const Y = state.settings.yayoi;
+  const name = e => e.raw ? e.account : ((Y.acct[e.account] || '').trim() || e.account);
+  const taxOf = e => {
+    const r = e.isTaxable ? rateOf(e.taxRate) : 0; if (!r) return Y.tax.none;
+    const sales = typeOf(e.account) === '収益';
+    return r === 0.1 ? (sales ? Y.tax.s10 : Y.tax.p10) : (sales ? Y.tax.s8 : Y.tax.p8);
+  };
+  const clean = s => String(s ?? '').replace(/"/g, '”').replace(/,/g, '，').replace(/[\r\n\t]/g, ' ');
+  const q = s => `"${clean(s)}"`;
+  const txs = state.transactions.filter(t => t.date >= opt.from && t.date <= opt.to && t.type !== 'closing'
+    && (opt.opening || t.type !== 'opening') && (opt.adj || !ADJ_TYPES.includes(t.type)));
+  const lines = [], checks = [];
+  let no = 0, dT = 0, cT = 0;
+  for (const t of txs) {
+    const pairs = splitTx(t);
+    for (const p of pairs) {
+      no++;
+      const memo = [], need = [];
+      if (TYPE_LABEL[t.type]) memo.push(`アプリで自動作成（${TYPE_LABEL[t.type]}）`);
+      if (pairs.length > 1) memo.push(`元は複数行の仕訳（${pairs.length}行に分割）`);
+      if (p.d.raw || p.c.raw) need.push('「諸口」を使用。弥生の期首残高の画面で入れる方法もあります');
+      let desc = t.description || '';
+      if ([...desc].length > 64) { desc = [...desc].slice(0, 64).join(''); need.push('摘要が64文字を超えたため切り詰め'); }
+      for (const e of [p.d, p.c]) {
+        const tx = taxOf(e);
+        if ((tx === Y.tax.s8 && Y.tax.s8 === YAYOI_TAX_GUESS.s8) || (tx === Y.tax.p8 && Y.tax.p8 === YAYOI_TAX_GUESS.p8)) need.push(`税区分「${tx}」は見本にない表記。弥生の登録名と照合してください`);
+      }
+      const dName = name(p.d), cName = name(p.c);
+      const bad = sjisBad(dName + cName + desc);
+      if (bad.length) need.push(`絵文字など弥生で使えない文字が${bad.length}種類あり「?」に置きかわります`);
+      const allMemo = [...need.map(n => '【要確認】' + n), ...memo].join(' ／ ');
+      if (need.length) checks.push({no, date: t.date, text: `${dName} ／ ${cName}　${yen(p.amt)}円　${desc}`, why: [...new Set(need)]});
+      dT += p.amt; cT += p.amt;
+      lines.push([q('2000'), no, q(''), q(wareki(t.date)), q(dName), q(''), q(''), q(taxOf(p.d)), p.amt, 0,
+        q(cName), q(''), q(''), q(taxOf(p.c)), p.amt, 0, q(desc), q(''), q(''), 0, q(''), q(allMemo), q('0'), q('0'), q('no')].join(','));
+    }
+  }
+  return {text: lines.length ? lines.join('\r\n') + '\r\n' : '', count: lines.length, txCount: txs.length, dT, cT, checks};
+}
+
+const yy = {from: '', to: '', adj: true, opening: false};
+function yyRange(kind) {
+  const d = new Date(), y = d.getFullYear(), m = d.getMonth() + 1;
+  const last = (yr, mo) => new Date(yr, mo, 0).getDate();
+  if (kind === 'thisMonth') return [`${y}-${pad(m)}-01`, `${y}-${pad(m)}-${last(y, m)}`];
+  if (kind === 'lastMonth') { const py = m === 1 ? y - 1 : y, pm = m === 1 ? 12 : m - 1; return [`${py}-${pad(pm)}-01`, `${py}-${pad(pm)}-${last(py, pm)}`]; }
+  if (kind === 'lastYear') return [`${y - 1}-01-01`, `${y - 1}-12-31`];
+  return [`${y}-01-01`, `${y}-12-31`];
+}
+V['settings.yayoi'] = () => {
+  if (!yy.from) [yy.from, yy.to] = yyRange('thisYear');
+  const r = yayoiBuild(yy), Y = state.settings.yayoi;
+  const used = [...usedAccts()].filter(typeOf).sort((a, b) => CAT_ORDER.indexOf(typeOf(a)) - CAT_ORDER.indexOf(typeOf(b)));
+  const preview = r.text.split('\r\n').slice(0, 4).join('\n');
+  return `<div class="card"><h2>弥生会計に取り込むファイルをつくる</h2>
+    <p class="small muted">弥生会計の「仕訳日記帳」のインポート形式（25項目・カンマ区切り・Shift-JIS）で書き出します。1行＝1仕訳（識別フラグ 2000）です。</p>
+    <div class="chips" style="margin-bottom:6px">${[['thisMonth','今月'],['lastMonth','先月'],['thisYear','今年'],['lastYear','去年']].map(([k, l]) => `<button data-act="yyRange" data-k="${k}">${l}</button>`).join('')}</div>
+    <div class="grid" style="grid-template-columns:1fr 1fr;gap:10px"><div><label class="f">はじめの日</label><input type="date" class="inp" value="${yy.from}" data-change="yyDate" data-k="from"></div><div><label class="f">おわりの日</label><input type="date" class="inp" value="${yy.to}" data-change="yyDate" data-k="to"></div></div>
+    <label class="check"><input type="checkbox" data-change="yyOpt" data-k="adj" ${yy.adj ? 'checked' : ''}> 決算整理の仕訳（減価償却・家事按分・棚卸）も入れる</label>
+    <label class="check"><input type="checkbox" data-change="yyOpt" data-k="opening" ${yy.opening ? 'checked' : ''}> 期首残高の仕訳も入れる（ふつうは入れない：弥生では期首残高を別の画面で入れます）</label>
+    <div class="kpis" style="margin-top:10px"><div class="kpi" style="background:var(--soft)"><div class="l">書き出す行数</div><div class="v">${r.count}<small>行</small></div></div>
+      <div class="kpi" style="background:var(--soft)"><div class="l">借方合計</div><div class="v">${yen(r.dT)}<small>円</small></div></div>
+      <div class="kpi" style="background:var(--soft)"><div class="l">貸方合計</div><div class="v">${yen(r.cT)}<small>円</small></div></div></div>
+    ${r.checks.length ? `<div class="note warn small"><b>【要確認】${r.checks.length}行</b>（ファイルの「仕訳メモ」にも書いてあります）<ul style="margin:6px 0 0;padding-left:20px">${r.checks.map(c => `<li>${c.no}行目　${c.date}　${esc(c.text)}<br>→ ${c.why.map(esc).join('<br>→ ')}</li>`).join('')}</ul></div>` : (r.count ? '<p class="note ok small">✓ 要確認の行はありません</p>' : '')}
+    ${preview ? `<details class="help"><summary>中身を見る（はじめの数行）</summary><pre style="white-space:pre-wrap;word-break:break-all;font-size:12px;margin:0">${esc(preview)}</pre></details>` : ''}
+    <div class="row" style="margin-top:12px"><button class="btn pri" data-act="yySend" ${r.count ? '' : 'disabled'}>📤 送る</button><button class="btn" data-act="yySave" ${r.count ? '' : 'disabled'}>💾 保存</button></div>
+    <p class="small muted">弥生会計での取り込み：「ファイル」→「インポート」→ このファイルを選ぶ。取り込む前に弥生のバックアップをとっておくと安心です。</p></div>
+    <div class="grid g2"><div class="card"><h2>科目名の対応</h2><p class="small muted">弥生で科目名がちがうものだけ直してください。空欄はアプリと同じ名前で書き出します。</p>
+      ${used.length ? used.map(a => `<div class="list-item"><span>${esc(a)}</span><span class="row" style="flex-wrap:nowrap;gap:4px"><span class="muted">→</span><input class="inp" style="width:160px;min-height:40px" placeholder="${esc(a)}" value="${esc(Y.acct[a] || '')}" data-change="yyAcct" data-a="${esc(a)}"></span></div>`).join('') : '<div class="empty">まだ仕訳がありません</div>'}</div>
+    <div class="card"><h2>税区分の表記</h2><p class="small muted">弥生に登録されている名前と同じにします。見本の表記を入れてあります。8%軽減の2つは見本になかったので、弥生の画面の表記と照らし合わせてください。</p>
+      ${YAYOI_TAX_LABELS.map(([k, l]) => `<label class="f">${l}</label><input class="inp" value="${esc(Y.tax[k])}" data-change="yyTax" data-k="${k}">`).join('')}
+      <p class="small muted">経費・仕入はすべて「適格」（インボイスあり）として書き出します。インボイスのない取引先の分は、弥生で税区分を直してください。</p></div></div>`;
+};
+A.yyRange = el => { [yy.from, yy.to] = yyRange(el.dataset.k); render(); };
+CH.yyDate = el => { yy[el.dataset.k] = el.value; if (yy.from && yy.to && yy.from > yy.to) [yy.from, yy.to] = [yy.to, yy.from]; render(); };
+CH.yyOpt = el => { yy[el.dataset.k] = el.checked; render(); };
+CH.yyAcct = el => { const v = el.value.trim(); if (v) state.settings.yayoi.acct[el.dataset.a] = v; else delete state.settings.yayoi.acct[el.dataset.a]; save(); render(); toast('保存しました'); };
+CH.yyTax = el => { const v = el.value.trim(); if (!v) { render(); return; } state.settings.yayoi.tax[el.dataset.k] = v; save(); render(); toast('保存しました'); };
+function yayoiFile() {
+  const r = yayoiBuild(yy);
+  return {r, bytes: toSJIS(r.text), name: `弥生インポート_${yy.from.replace(/-/g, '')}-${yy.to.replace(/-/g, '')}.txt`};
+}
+A.yySave = () => { const f = yayoiFile(); download(f.bytes, f.name, 'text/plain'); toast(`${f.r.count}行を書き出しました（借方・貸方合計 ${yen(f.r.dT)}円）`); };
+A.yySend = async () => { const f = yayoiFile(); if (await shareFile(f.bytes, f.name, 'text/plain', '弥生会計インポート用')) toast(`${f.r.count}行を書き出しました`); };
+
+/* ---------- 使い方 ---------- */
+V['settings.help'] = () => `<div class="card"><h2>はじめに</h2>
+  <p>個人事業主のための帳簿アプリです。売上と経費を入れていくと、帳簿（仕訳帳・総勘定元帳）、決算書（損益計算書・貸借対照表）、消費税の見込みが自動でできます。</p>
+  <p class="note small">データはこのタブレットの中だけに保存されます。ネットがなくても使えます。そのかわり、<b>バックアップは自分でとる</b>必要があります（設定 → バックアップ・データ）。</p>
+  <details class="help" open><summary>毎日の入力（かんたん入力）</summary><ol>
+    <li>「売上・収入」か「経費・仕入」を選ぶ</li><li>科目（何に使ったか）を選ぶ。よく使う科目はボタンでも選べます</li><li>払い方（入金先）を選ぶ</li><li>金額（税込）と消費税率を入れて「登録する」</li></ol>
+    <p class="small muted">登録したあとすぐなら、下に出る「元に戻す」で取り消せます。あとで直すときは「帳簿 → 仕訳帳」の「直す」から。</p></details>
+  <details class="help"><summary>払い方の選び方</summary><ul>
+    <li><b>カード・後払い</b>：クレジットカードで払った経費。カード代が口座から引き落とされたら、「振替入力 → よくある取引 → カード代が引き落とされた」で入れます</li>
+    <li><b>個人のお金で払った</b>：生活用の財布や口座から事業の経費を払ったとき（事業主借）</li>
+    <li><b>あとで入金（売掛）</b>：請求書を出して、入金がまだの売上。入金されたら「売掛金が入金された」で入れます</li></ul></details>
+  <details class="help"><summary>年末にすること</summary><ol>
+    <li>決算 → 固定資産・減価償却：10万円以上の設備を登録して、減価償却を計上</li><li>決算 → 家事按分：自宅兼事務所の家賃・電気代などの生活の分を外す</li>
+    <li>決算 → 棚卸：在庫がある場合だけ</li><li>集計 → 決算書：確定申告書（青色申告決算書）に写す</li><li>決算 → 翌年への繰越：次の年の期首残高をつくる</li></ol></details>
+  <details class="help"><summary>複式簿記のきほん</summary>
+    <p>すべての取引を「左（借方）」と「右（貸方）」の2つに分けて書きます。左右の金額はいつも同じです。かんたん入力では自動で分けるので、覚えなくても使えます。</p>
+    <div class="tbl-wrap"><table><thead><tr><th>グループ</th><th>例</th><th>ふえたら</th></tr></thead><tbody>
+    <tr><td>資産</td><td>現金、預金、売掛金</td><td>左（借方）</td></tr><tr><td>費用</td><td>仕入、家賃、消耗品費</td><td>左（借方）</td></tr>
+    <tr><td>負債</td><td>借入金、未払金</td><td>右（貸方）</td></tr><tr><td>資本</td><td>元入金</td><td>右（貸方）</td></tr><tr><td>収益</td><td>売上、雑収入</td><td>右（貸方）</td></tr></tbody></table></div>
+    <p class="small muted">事業主貸＝事業のお金を生活に使った、事業主借＝生活のお金を事業に使った、です。</p></details>
+  <details class="help"><summary>消費税について</summary><p class="small">帳簿は税込で記録し、入力した税率から消費税額を計算して一緒に記録しています。「集計 → 消費税」で、原則課税・簡易課税・2割特例のそれぞれの納付見込みを比べられます。数字はおおよそなので、申告の前に税務署・税理士に確認してください。</p></details>
+  <details class="help"><summary>タブレットの「戻る」ボタン</summary><p class="small">画面を移ったあとの「戻る」で、前の画面にもどれます。</p></details></div>`;
+
+/* ---------- オフラインで動くようにする ---------- */
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+
+load();
+history.replaceState({sec: view.sec, sub: view.sub[view.sec]}, '');
+render();
+</script>
+</body>
+</html>
